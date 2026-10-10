@@ -71,7 +71,7 @@ npm run import:history -- --reconcile-stock
 
 Ela registra os ajustes necessários no saldo atual, considerando os movimentos nativos do aplicativo, sem baixar novamente todo o histórico. Saldos desconhecidos não são convertidos automaticamente. Faça a migração antes de encerrar a primeira feira. Consulte [metas, feiras e exportações](docs/10-feiras.md).
 
-A repetição da mesma origem não duplica pedidos nem desfaz recebimentos ou cancelamentos feitos no programa. Linhas novas, removidas ou alteradas no ODS depois da migração são recusadas: esse procedimento não sincroniza dois caixas em uso paralelo. O detalhe e o roteiro de conferência estão em [docs/09-importacao-historico.md](docs/09-importacao-historico.md).
+A repetição da mesma origem não duplica pedidos nem desfaz recebimentos, cancelamentos ou exclusões feitos no programa. O modo padrão recusa linhas novas, removidas ou alteradas no ODS depois da migração. Para uma inclusão pontual de vendas reais acrescentadas ao final da planilha, existe `npm run import:history -- caminho/do/historico-planilha.json --append`: confira as linhas ausentes, ensaie em uma cópia e encerre o aplicativo antes de aplicar. Esse modo preserva os registros antigos, baixa apenas as novas vendas e exige que totais e estoque final coincidam com a origem. Não sincroniza dois caixas em uso paralelo. O detalhe e o roteiro de conferência estão em [docs/09-importacao-historico.md](docs/09-importacao-historico.md).
 
 ## Verificar
 

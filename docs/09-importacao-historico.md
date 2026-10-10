@@ -22,7 +22,29 @@ O extrator exige vendas e fechamentos conferidos. Produto desconhecido, preço/p
 
 Se a coluna Pedido estiver preenchida, as linhas da mesma data e referência formam um pedido misto. Pagamento e situação precisam ser compatíveis; produtos repetidos no grupo exigem revisão. Sem referência, cada linha é um pedido independente: não há evidência para inferir que duas compras próximas foram o mesmo atendimento. Observações distintas são preservadas juntas.
 
-Renomear o arquivo ou salvá-lo sem mudar os registros não duplica pedidos. Alterar, inserir, remover ou deslocar linhas depois da migração é recusado. Este comando migra um snapshot inicial; não reconcilia edição contínua da planilha com lançamentos no programa.
+Renomear o arquivo ou salvá-lo sem mudar os registros não duplica pedidos. No modo padrão, alterar, inserir, remover ou deslocar linhas depois da migração é recusado. O acréscimo explícito descrito abaixo permite uma inclusão pontual após conferir as novas vendas; nenhum dos modos sincroniza edição contínua da planilha com lançamentos no programa.
+
+## Acrescentar vendas após a migração inicial
+
+Uma venda real lançada somente no ODS depois da migração inicial ainda precisa entrar no caixa. Nesse caso, seu estoque não foi baixado no aplicativo. O modo `--append` usa o caminho normal de venda somente para essas linhas novas, dentro de uma transação que também grava os vínculos com a origem.
+
+```bash
+CAIXA_DB=/caminho/da/copia.sqlite npm run import:history -- /caminho/do/historico-planilha.json --append
+```
+
+Primeiro extraia uma cópia salva do ODS e compare as linhas ausentes com o histórico do aplicativo, para confirmar que são vendas reais ainda não lançadas. Totais agregados iguais não provam que todos os pedidos são os mesmos: diferenças entre lançamentos podem se compensar. Ensaie o comando em uma cópia do banco, confira os resultados e só então, com o aplicativo encerrado, aplique ao banco de uso. O CLI cria um backup anterior, incluindo o WAL.
+
+As condições para o acréscimo são deliberadamente restritas:
+
+- A primeira feira deve continuar aberta, sem outro evento criado, e as datas das novas vendas devem estar abertas.
+- Todas as vendas e todos os fechamentos anteriores precisam continuar presentes, com seus hashes originais intactos. Novas linhas só podem vir depois da última linha importada.
+- Uma linha nova não pode alterar um pedido antigo nem acrescentar um fechamento. Pedidos cancelados na origem exigem conferência separada.
+- Produto, participante e preço das novas linhas precisam corresponder ao cadastro atual. Não há sobrescrita do cadastro para aceitar a importação.
+- Recebido, líquido, descontos, taxas, pendências, permutas, brindes, rateio, pagamentos e saldo dos produtos precisam coincidir com a fonte após a inclusão.
+
+Vendas, itens, vínculos e baixas de estoque são confirmados juntos. Qualquer divergência desfaz tudo que o acréscimo tentou gravar, inclusive versões do catálogo. Uma contagem manual que já inclua as saídas novas pode tornar o saldo incompatível; nesse caso, o comando recusa a inclusão em vez de reduzir esse saldo novamente. `--append` não pode ser combinado com `--reconcile-stock`.
+
+Repetir a mesma origem retorna antes de gravar ou baixar estoque, mesmo se um pedido já tiver sido recebido, cancelado ou excluído no aplicativo. Esse retorno preserva o estado atual; não certifica novamente sua igualdade com os resumos da planilha. O histórico inicial e o acréscimo guardam a origem `Planilha`, sem inventar um horário de venda que o ODS não registrou.
 
 ## Estoque e fechamento
 
@@ -68,8 +90,8 @@ Para voltar ao estado anterior, preserve o banco atual e restaure o backup em ou
 
 ## Evidência e exercício
 
-Os testes usam SQLite real e desafiam a preservação do catálogo completo e do pedido nativo, o agrupamento misto, preço/participante distintos do cadastro atual, repetição após recebimento/cancelamento, recusa de origem alterada, rollback após linhas válidas, conflito com um fechamento e recuperação de um backup v2. Um teste privado importa o snapshot real somente em um banco de teste. O navegador confere histórico anterior, horário persistente, filtro de dias e cancelamento bloqueado após fechamento.
+Os testes usam SQLite real e desafiam a preservação do catálogo completo e do pedido nativo, o agrupamento misto, preço/participante distintos do cadastro atual, repetição após recebimento/cancelamento, recusa de origem alterada, rollback após linhas válidas, conflito com um fechamento e recuperação de um backup v2. O acréscimo possui provas de baixa única, rollback de todas as tabelas, repetição após exclusão, estoque desconhecido, contagem manual, cadastro divergente e backup completo do CLI. Um teste privado importa o snapshot real somente em um banco de teste. O navegador confere histórico anterior, horário persistente, filtro de dias e cancelamento bloqueado após fechamento.
 
 `python3 -m unittest discover -s scripts -p 'test_*.py'` verifica separadamente que linhas vazias/repetidas e células cobertas preservam as posições físicas e lógicas no leitor ODS. A extração e esses testes exigem Python 3; as dependências são apenas da biblioteca padrão.
 
-Para estudar, explique por que `createSale()` não é o caminho adequado para essa migração. Depois tente, em um banco descartável, alterar o pagamento de uma linha após a primeira importação e observe a recusa. Reconstrua a razão de guardar o hash original separado do estado atual antes de modificar o importador. Esse contrato também deve ser preservado se a leitura do banco e a API forem reconstruídas em Rust.
+Para estudar, explique por que `createSale()` não é o caminho adequado para os pedidos da migração inicial, mas pode registrar as vendas acrescentadas depois dela. Depois tente, em um banco descartável, alterar o pagamento de uma linha após a primeira importação e observe a recusa. Reconstrua a razão de guardar o hash original separado do estado atual antes de modificar o importador. Esse contrato também deve ser preservado se a leitura do banco e a API forem reconstruídas em Rust.
