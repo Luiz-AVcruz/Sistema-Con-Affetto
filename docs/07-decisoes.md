@@ -4,8 +4,8 @@
 
 | Decisão | Motivo | Quando revisar |
 | --- | --- | --- |
-| Angular + Node/TypeScript | Aproveitar experiência profissional e produzir uma referência de estudo. | Ao fazer o desafio Rust ou ao mudar explicitamente o objetivo. |
-| Navegador local e Node em loopback | Um operador no notebook, sem necessidade de infraestrutura online. | Se houver uso por rede, outro dispositivo ou distribuição como programa instalado. |
+| Tauri com Angular + Node/TypeScript | Abrir pelo ícone, reaproveitando telas e regras já verificadas. A prioridade passou a ser utilidade no comércio. | Se medições ou limitações de uso justificarem substituir a interface ou o backend. |
+| Backend local gerenciado pelo desktop | Um operador offline, sem iniciar serviços manualmente. O modo web continua disponível para manutenção. | Se houver uso por rede ou outro dispositivo. |
 | SQLite e SQL explícito | Persistência local e transações observáveis, sem administrar outro serviço. | Se medições e novos requisitos justificarem outra arquitetura. |
 | Ajustes por item | Preservar a regra da planilha e evitar inventar rateio global. | Se desconto ou taxa do pedido inteiro passar a ser necessário. |
 | Pendência sem reserva de estoque | Reproduzir a planilha. | Se produto separado para cliente precisar ficar indisponível para outros atendimentos. |
@@ -15,6 +15,8 @@
 | CSV e backup SQLite | Consulta no Calc e recuperação completa são tarefas diferentes. | Quando houver necessidade concreta de XLSX com múltiplas abas. |
 | Migração inicial com identidade das linhas | Trazer pedidos e fechamentos, preservando o saldo já importado e os pedidos nativos. | Se for necessário conciliar alterações posteriores de duas fontes em uso. |
 | Horário de registro com origem explícita | Mostrar o instante conhecido sem atribuir a vendas antigas o horário da importação. | Se a origem passar a registrar o instante real da venda. |
+| Uma feira ativa, arquivos históricos imutáveis | Separar eventos futuros, metas e fechamentos, sem perder o estoque compartilhado. | Se forem necessários dois eventos simultâneos ou retificação auditável. |
+| Porta desktop fixa | Preservar a origem do armazenamento de rascunhos e UUIDs entre aberturas. | Ao mover rascunhos para persistência independente da origem web. |
 
 ## Evidência obtida durante a construção
 

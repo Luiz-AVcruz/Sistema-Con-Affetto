@@ -1,4 +1,7 @@
-<header class="app-header"><div><p class="eyebrow">Aplicativo local</p><h1>Caixa da feira</h1></div><label class="date-field">Data de trabalho<input type="date" [ngModel]="store.date()" (ngModelChange)="store.changeDate($event)" [disabled]="store.busy()" min="2020-01-01" max="2100-12-31"></label></header>
+<header class="app-header"><div><p class="eyebrow">Aplicativo local</p><h1>Caixa da feira</h1></div><div class="header-context">
+  @if (store.data(); as data) { <label class="fair-field">Feira<select [ngModel]="data.fair.id" (ngModelChange)="store.selectFair($event)" [disabled]="store.busy()">@for (fair of data.fairs; track fair.id) { <option [ngValue]="fair.id">{{ fair.name }} · {{ fair.closedAt ? 'Encerrada' : 'Ativa' }}</option> }</select></label> }
+  <label class="date-field">Data de trabalho<input type="date" [ngModel]="store.date()" (ngModelChange)="store.changeDate($event)" [disabled]="store.busy()" min="2020-01-01" max="2100-12-31"></label>
+</div></header>
 <main>
   <p class="validation-note">Versão em validação. Os novos pedidos não atualizam a planilha.</p>
   <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="view.set(item)" [disabled]="store.saving()">{{ item }}</button> }</nav>
@@ -6,6 +9,6 @@
   @if (store.notice()) { <p class="notice" role="status">{{ store.notice() }}</p> }
   @if (store.loading()) { <p role="status" class="muted">Atualizando dados do caixa...</p> }
   @if (store.data()) {
-    @switch (view()) { @case ('Vender') { <app-sales /> } @case ('Produtos') { <app-products /> } @case ('Fechamento') { <app-closing /> } @case ('Histórico') { <app-history /> } }
+    @switch (view()) { @case ('Vender') { <app-sales /> } @case ('Produtos') { <app-products /> } @case ('Fechamento') { <app-closing /> } @case ('Histórico') { <app-history /> } @case ('Feiras') { <app-fairs /> } }
   } @else if (!store.loading()) { <section class="panel"><h2>Não foi possível carregar o caixa</h2><button class="primary" (click)="store.refresh()">Tentar novamente</button></section> }
 </main>

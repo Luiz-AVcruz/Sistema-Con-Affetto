@@ -1,5 +1,7 @@
 # Contrato HTTP
 
+O contexto de feira, metas, encerramento e exportações está detalhado em [Metas e feiras](10-feiras.md). A interface envia `fairId` em pedidos novos e como parâmetro nas operações de recebimento, cancelamento e fechamento. `bootstrap` devolve os dados da feira selecionada, a lista dos resumos e a identificação da feira ativa. Catálogo e estoque são compartilhados.
+
 A API recebe JSON em UTF-8. Dinheiro é expresso em centavos inteiros; datas de negócio usam `YYYY-MM-DD`; instantes de gravação usam ISO 8601. Textos de pagamento e situação são exatamente os definidos em `packages/shared/src/index.ts`.
 
 Uma requisição mutável exige `Content-Type: application/json`. O servidor aceita acesso apenas pelo Host local e rejeita origens externas. A interface de produção e a API usam a mesma origem. No desenvolvimento, o proxy do Angular evita precisar configurar CORS.

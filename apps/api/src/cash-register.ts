@@ -1,14 +1,76 @@
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import type { Owner, Product, ProductInput, SaleInput, Sale, SaleItem, Summary, Day, CashInput, Bootstrap, PaymentMethod } from '@caixa/shared';
+import type { Owner, Product, ProductInput, SaleInput, Sale, SaleItem, Summary, Day, CashInput, Bootstrap, PaymentMethod, Fair, FairInput } from '@caixa/shared';
 import { calculateItem, isNonCash, summarize } from './finance.js';
 import { requireCondition } from './validation.js';
 
-type SaleRow = { id: string; request_hash: string; date: string; payment_date: string | null; payment_method: PaymentMethod; status: Sale['status']; note: string; created_at: string; origin: Sale['origin'] };
+type SaleRow = { id: string; fair_id: number; request_hash: string; date: string; payment_date: string | null; payment_method: PaymentMethod; status: Sale['status']; note: string; created_at: string; origin: Sale['origin'] };
 type DayRow = { date: string; opening_cents: number; extra_cents: number; withdrawal_cents: number; counted_cents: number | null; note: string; closed_at: string | null; snapshot: string | null };
+type FairRow = { id: number; name: string; target_cents: number | null; start_date: string; end_date: string | null; created_at: string; closed_at: string | null; snapshot: string | null };
 
 export class CashRegister {
-  constructor(public readonly db: Database.Database) {}
+  readonly fairId: number;
+  constructor(public readonly db: Database.Database, fairId?: number) {
+    const fair = fairId === undefined
+      ? db.prepare('SELECT id FROM fairs ORDER BY (closed_at IS NULL) DESC, id DESC LIMIT 1').get()
+      : db.prepare('SELECT id FROM fairs WHERE id=?').get(fairId);
+    requireCondition(fair, 'Feira inexistente.', 404);
+    this.fairId = (fair as { id: number }).id;
+  }
+
+  fair(): Fair {
+    const row = this.db.prepare('SELECT * FROM fairs WHERE id=?').get(this.fairId) as FairRow;
+    if (row.closed_at && row.snapshot) return JSON.parse(row.snapshot) as Fair;
+    return { id: row.id, name: row.name, targetCents: row.target_cents, startDate: row.start_date,
+      endDate: row.end_date, createdAt: row.created_at, closedAt: row.closed_at, summary: this.summary() };
+  }
+  fairs(): Fair[] {
+    return (this.db.prepare('SELECT id FROM fairs ORDER BY id DESC').all() as { id: number }[])
+      .map(row => new CashRegister(this.db, row.id).fair());
+  }
+  private assertFairOpen(): void {
+    const row = this.db.prepare('SELECT closed_at FROM fairs WHERE id=?').get(this.fairId) as FairRow;
+    requireCondition(!row.closed_at, 'Esta feira está encerrada. Seu histórico foi preservado.');
+  }
+  saveFair(input: FairInput): Fair {
+    return this.db.transaction(() => {
+      this.assertFairOpen();
+      this.db.prepare('UPDATE fairs SET name=?,target_cents=? WHERE id=?').run(input.name, input.targetCents, this.fairId);
+      return this.fair();
+    }).immediate();
+  }
+  createFair(input: FairInput & { startDate: string }): Fair {
+    return this.db.transaction(() => {
+      requireCondition(!this.db.prepare('SELECT id FROM fairs WHERE closed_at IS NULL').get(), 'Encerre a feira atual antes de iniciar outra.');
+      const last = this.db.prepare('SELECT MAX(end_date) AS date FROM fairs').get() as { date: string | null };
+      requireCondition(!last.date || input.startDate >= last.date, 'A nova feira não pode começar antes do encerramento anterior.', 400);
+      const result = this.db.prepare('INSERT INTO fairs(name,target_cents,start_date,created_at) VALUES(?,?,?,?)')
+        .run(input.name, input.targetCents, input.startDate, new Date().toISOString());
+      return new CashRegister(this.db, Number(result.lastInsertRowid)).fair();
+    }).immediate();
+  }
+  closeFair(date: string): Fair {
+    return this.db.transaction(() => {
+      const current = this.fair();
+      if (current.closedAt) {
+        requireCondition(current.endDate === date, 'A feira já foi encerrada em outra data.');
+        return current;
+      }
+      const sales = this.sales();
+      requireCondition(!sales.some(sale => sale.status === 'Pendente'), 'Receba ou cancele os pedidos pendentes antes de encerrar a feira.');
+      const dates = new Set([current.startDate, ...sales.flatMap(sale => [sale.date, ...(sale.paymentDate ? [sale.paymentDate] : [])]),
+        ...(this.db.prepare('SELECT date FROM days WHERE fair_id=?').all(this.fairId) as { date: string }[]).map(row => row.date)]);
+      requireCondition([...dates].every(day => day <= date), 'O encerramento não pode ser anterior aos registros da feira.', 400);
+      for (const day of dates) {
+        const saved = this.day(day);
+        if (!saved.closedAt) this.closeDay(day, saved);
+      }
+      const closed: Fair = { ...this.fair(), endDate: date, closedAt: new Date().toISOString() };
+      this.db.prepare('UPDATE fairs SET end_date=?,closed_at=?,snapshot=? WHERE id=?')
+        .run(date, closed.closedAt, JSON.stringify(closed), this.fairId);
+      return closed;
+    }).immediate();
+  }
 
   owners(): Owner[] { return this.db.prepare('SELECT id, name FROM owners ORDER BY name').all() as Owner[]; }
   products(): Product[] {
@@ -40,23 +102,31 @@ export class CashRegister {
 
   sales(): Sale[] {
     const rows = this.db.prepare(`SELECT s.*, CASE WHEN EXISTS(SELECT 1 FROM spreadsheet_records r WHERE r.sale_id=s.id)
-      THEN 'Planilha' ELSE 'Aplicativo' END AS origin FROM sales s
-      ORDER BY s.date DESC, origin ASC, s.created_at DESC, s.rowid DESC`).all() as SaleRow[];
+      THEN 'Planilha' ELSE 'Aplicativo' END AS origin FROM sales s WHERE s.fair_id=?
+      ORDER BY s.date DESC, origin ASC, s.created_at DESC, s.rowid DESC`).all(this.fairId) as SaleRow[];
     const allItems = this.db.prepare(`SELECT sale_id AS saleId, product_id AS productId, quantity, name,
       owner_id AS ownerId, owner_name AS ownerName, price_cents AS priceCents, price_cents AS expectedPriceCents,
       discount_cents AS discountCents, fee_cents AS feeCents, gross_cents AS grossCents,
-      total_cents AS totalCents, net_cents AS netCents FROM sale_items ORDER BY id`).all() as (SaleItem & { saleId: string })[];
+      i.total_cents AS totalCents, i.net_cents AS netCents FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.fair_id=? ORDER BY i.id`).all(this.fairId) as (SaleItem & { saleId: string })[];
     return rows.map(row => {
       const items = allItems.filter(item => item.saleId === row.id).map(({ saleId, ...item }) => item);
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
-      return { id: row.id, date: row.date, paymentDate: row.payment_date, paymentMethod: row.payment_method,
+      return { id: row.id, fairId: row.fair_id, date: row.date, paymentDate: row.payment_date, paymentMethod: row.payment_method,
         status: row.status, note: row.note, createdAt: row.created_at, origin: row.origin, items,
         grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents') };
     });
   }
 
   private assertOpen(date: string): void {
-    const row = this.db.prepare('SELECT closed_at FROM days WHERE date=?').get(date) as { closed_at: string | null } | undefined;
+    this.assertFairOpen();
+    const start = this.db.prepare('SELECT start_date FROM fairs WHERE id=?').get(this.fairId) as { start_date: string };
+    if (date < start.start_date) {
+      // A feira inicial recebe também registros anteriores à criação do programa.
+      requireCondition(this.fairId === 1 && (this.db.prepare('SELECT COUNT(*) AS n FROM fairs').get() as { n: number }).n === 1,
+        'A data é anterior ao início desta feira.', 400);
+      this.db.prepare('UPDATE fairs SET start_date=? WHERE id=?').run(date, this.fairId);
+    }
+    const row = this.db.prepare('SELECT closed_at FROM days WHERE fair_id=? AND date=?').get(this.fairId, date) as { closed_at: string | null } | undefined;
     requireCondition(!row?.closed_at, `O dia ${date} está fechado. Os registros foram preservados.`);
   }
 
@@ -71,10 +141,13 @@ export class CashRegister {
 
   createSale(input: SaleInput): Sale {
     return this.db.transaction(() => {
-      const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
-      const existing = this.db.prepare('SELECT request_hash FROM sales WHERE id=?').get(input.requestId) as { request_hash: string } | undefined;
+      requireCondition(input.fairId === undefined || input.fairId === this.fairId, 'O pedido pertence a outra feira.');
+      // A feira fica no registro, preservando o hash de retries de clientes anteriores.
+      const { fairId: _fairId, ...payload } = input;
+      const hash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+      const existing = this.db.prepare('SELECT request_hash,fair_id FROM sales WHERE id=?').get(input.requestId) as { request_hash: string; fair_id: number } | undefined;
       if (existing) {
-        requireCondition(existing.request_hash === hash, 'Este pedido já foi enviado com outros valores. Confira o histórico antes de iniciar outro.');
+        requireCondition(existing.fair_id === this.fairId && existing.request_hash === hash, 'Este pedido já foi enviado com outros valores ou em outra feira. Confira o histórico antes de iniciar outro.');
         return this.sales().find(sale => sale.id === input.requestId)!;
       }
       this.assertOpen(input.date);
@@ -86,8 +159,8 @@ export class CashRegister {
         requireCondition(product, 'Produto inexistente.', 400);
         return calculateItem(product, item, input.paymentMethod);
       });
-      this.db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at) VALUES(?,?,?,?,?,?,?,?)')
-        .run(input.requestId, hash, input.date, input.status === 'Pago' ? input.date : null, input.paymentMethod, input.status, input.note, new Date().toISOString());
+      this.db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at,fair_id) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(input.requestId, hash, input.date, input.status === 'Pago' ? input.date : null, input.paymentMethod, input.status, input.note, new Date().toISOString(), this.fairId);
       const insert = this.db.prepare(`INSERT INTO sale_items(sale_id,product_id,name,owner_id,owner_name,quantity,price_cents,
         discount_cents,fee_cents,gross_cents,total_cents,net_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
       for (const item of items) insert.run(input.requestId, item.productId, item.name, item.ownerId, item.ownerName,
@@ -119,6 +192,7 @@ export class CashRegister {
       const sale = this.sales().find(sale => sale.id === id);
       requireCondition(sale, 'Pedido inexistente.', 404);
       if (sale.status === 'Cancelado') return sale;
+      this.assertFairOpen();
       if (sale.status === 'Pago') { this.assertOpen(sale.paymentDate!); this.changeStock(sale.items, false); }
       this.db.prepare("UPDATE sales SET status='Cancelado' WHERE id=?").run(id);
       return this.sales().find(sale => sale.id === id)!;
@@ -128,7 +202,7 @@ export class CashRegister {
   summary(date?: string): Summary { return summarize(this.sales(), this.owners(), date); }
 
   day(date: string): Day {
-    const row = this.db.prepare('SELECT * FROM days WHERE date=?').get(date) as DayRow | undefined;
+    const row = this.db.prepare('SELECT * FROM days WHERE fair_id=? AND date=?').get(this.fairId, date) as DayRow | undefined;
     if (row?.closed_at && row.snapshot) return JSON.parse(row.snapshot) as Day;
     const summary = this.summary(date);
     const openingCents = row?.opening_cents ?? 0, extraCents = row?.extra_cents ?? 0, withdrawalCents = row?.withdrawal_cents ?? 0;
@@ -141,10 +215,10 @@ export class CashRegister {
   saveDay(date: string, cash: CashInput): Day {
     return this.db.transaction(() => {
       this.assertOpen(date);
-      this.db.prepare(`INSERT INTO days(date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note) VALUES(?,?,?,?,?,?)
-        ON CONFLICT(date) DO UPDATE SET opening_cents=excluded.opening_cents,extra_cents=excluded.extra_cents,
+      this.db.prepare(`INSERT INTO days(fair_id,date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note) VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(fair_id,date) DO UPDATE SET opening_cents=excluded.opening_cents,extra_cents=excluded.extra_cents,
         withdrawal_cents=excluded.withdrawal_cents,counted_cents=excluded.counted_cents,note=excluded.note`)
-        .run(date, cash.openingCents, cash.extraCents, cash.withdrawalCents, cash.countedCents, cash.note);
+        .run(this.fairId, date, cash.openingCents, cash.extraCents, cash.withdrawalCents, cash.countedCents, cash.note);
       return this.day(date);
     })();
   }
@@ -160,14 +234,17 @@ export class CashRegister {
       }
       const day = this.saveDay(date, cash);
       const closed = { ...day, closedAt: new Date().toISOString() };
-      this.db.prepare('UPDATE days SET closed_at=?, snapshot=? WHERE date=?').run(closed.closedAt, JSON.stringify(closed), date);
+      this.db.prepare('UPDATE days SET closed_at=?, snapshot=? WHERE fair_id=? AND date=?').run(closed.closedAt, JSON.stringify(closed), this.fairId, date);
       return closed;
     })();
   }
 
   bootstrap(date: string): Bootstrap {
-    const closed = this.db.prepare('SELECT snapshot FROM days WHERE closed_at IS NOT NULL ORDER BY date DESC').all() as { snapshot: string }[];
-    return { owners: this.owners(), products: this.products(), sales: this.sales(), day: this.day(date),
-      total: this.summary(), closedDays: closed.map(row => JSON.parse(row.snapshot) as Day) };
+    const closed = this.db.prepare('SELECT snapshot FROM days WHERE fair_id=? AND closed_at IS NOT NULL ORDER BY date DESC').all(this.fairId) as { snapshot: string }[];
+    const fair = this.fair();
+    const active = this.db.prepare('SELECT id FROM fairs WHERE closed_at IS NULL').get() as { id: number } | undefined;
+    return { fair, fairs: this.fairs(), activeFairId: active?.id ?? null,
+      owners: this.owners(), products: this.products(), sales: this.sales(), day: this.day(date),
+      total: fair.summary, closedDays: closed.map(row => JSON.parse(row.snapshot) as Day) };
   }
 }

@@ -9,6 +9,7 @@
 | `sales` | Identificador, chave de reenvio, datas, pagamento, situação e observação. |
 | `sale_items` | Quantidades, valores e dados históricos de cada item. |
 | `days` | Conferência de dinheiro e snapshot do fechamento. |
+| `fairs` | Nome, meta, período e snapshot definitivo de cada feira. |
 | `stock_adjustments` | Contagens manuais que alteraram um estoque já cadastrado. |
 | `spreadsheet_records` | Identidade e hash originais de linhas/fechamentos importados, vínculo com o pedido ou dia e evidência do snapshot ODS. |
 
@@ -67,7 +68,7 @@ SQLite usa WAL e `synchronous=FULL`. O WAL pode guardar alterações confirmadas
 
 O endpoint de backup serializa o conteúdo do banco aberto. O teste grava esses bytes em um arquivo, abre esse arquivo em outro SQLite e verifica integridade, valores e fechamento. O cabeçalho de modo WAL não é aceito pela desserialização direta em memória da dependência; abrir a cópia por arquivo corresponde ao uso real do backup. Isso comprova o snapshot lógico e sua legibilidade; não equivale a garantir sobrevivência de qualquer falha de disco ou energia.
 
-O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Aceita v1, v2 e v3 e migra apenas a cópia quando necessário. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis.
+O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Aceita v1, v2, v3 e v4 e migra apenas a cópia quando necessário. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis.
 
 O destino precisa estar livre também de `-wal`, `-shm` e `-journal`. Um WAL residual de outro banco pode ser reaplicado ao abrir o arquivo restaurado, produzindo registros diferentes mesmo com `integrity_check` igual a `ok`. O programa recusa esse caminho e preserva os auxiliares. O teste reproduz a presença de um WAL real sem o arquivo principal.
 
@@ -75,7 +76,9 @@ O destino precisa estar livre também de `-wal`, `-shm` e `-journal`. Um WAL res
 
 `PRAGMA user_version` identifica o schema. A versão 1 foi usada no primeiro protótipo; a versão 2 acrescenta a proteção de edição por `products.version`; a versão 3 acrescenta `spreadsheet_records`. Um banco novo recebe as tabelas atuais. Ao abrir v1, uma transação adiciona a coluna de versão com valor inicial 1 se estiver ausente; os valores existentes são preservados. Depois, v1 ou v2 recebem os vínculos de importação em outra transação, sem atualizar as seis tabelas anteriores. Reabrir v3 não repete essas alterações.
 
-Os testes partem de bancos v1 e v2 com vendas, estoque e fechamento. Comparam os registros das seis tabelas anteriores, conferem que a nova tabela começa vazia, integridade e reabertura. A restauração de um backup v3 também preserva os vínculos de origem. Um banco de versão mais nova é recusado antes de mudar seu modo de journal.
+A v4 acrescenta feiras e identifica dias pelo par `(fair_id,date)`. Os registros anteriores pertencem à feira inicial. A reconstrução das chaves de dias e origens importadas preserva os snapshots e confere as referências antes de confirmar. Consulte [operação e migração de feiras](10-feiras.md).
+
+Os testes partem das estruturas antigas v1, v2 e v3 com vendas, estoque e fechamento. Comparam os registros anteriores, integridade e reabertura. A restauração v3 preserva os vínculos de origem, e v4 preserva também os registros de feiras. Um banco de versão mais nova é recusado antes de mudar seu modo de journal.
 
 A migração de histórico ocorre em uma transação `IMMEDIATE`, após a validação do JSON. Ela insere os snapshots originais e os vínculos, sem chamar o caminho normal de venda que consome estoque. Resumos divergentes provocam rollback dos pedidos, itens, participantes adicionais, fechamentos e vínculos. A identidade da linha e o hash original continuam iguais mesmo se o estado do pedido mudar depois no aplicativo. Veja [Importação de histórico](09-importacao-historico.md).
 

@@ -1,6 +1,6 @@
-# Guia de estudo
+# Documentação do caixa
 
-Esta documentação explica o funcionamento do programa para permitir leitura, depuração, alteração e reconstrução. O código é uma implementação de referência; entender uma decisão exige acompanhar a entrada, a regra e a evidência que verifica o resultado.
+O foco do programa é o atendimento no comércio, com uso local e recuperação dos dados. Esta documentação reúne instruções de uso, regras e decisões para permitir manutenção. Os roteiros de estudo anteriores continuam disponíveis como material secundário.
 
 Leia nesta ordem:
 
@@ -12,6 +12,7 @@ Leia nesta ordem:
 6. [Reconstrução do backend em Rust](06-desafio-rust.md): critérios de equivalência e sequência do desafio.
 7. [Versionamento local](08-git.md): como conferir, selecionar e registrar mudanças sem incluir os dados do caixa.
 8. [Importação de histórico](09-importacao-historico.md): como migrar pedidos e fechamentos sem duplicar estoque ou inventar horários.
+9. [Metas e feiras](10-feiras.md): operação, encerramento, histórico, exportação e preservação de bancos antigos.
 
 Depois de mudar um comportamento, atualize a regra correspondente e o teste que a demonstra. Registre decisões específicas em [Decisões e pendências](07-decisoes.md), com o motivo e a condição que justificaria revisá-las.
 

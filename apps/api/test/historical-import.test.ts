@@ -10,6 +10,7 @@ import { openDatabase } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
 import { importHistory, type HistoricalInput } from '../src/historical-import.js';
 import { projectRoot } from '../src/paths.js';
+import { legacyDatabase } from './legacy-database.js';
 
 function source(): HistoricalInput {
   const expected = { receivedCents: 5899, netCents: 5862, discountCents: 101, feeCents: 37,
@@ -48,7 +49,7 @@ test('importação preserva pedido nativo, estoque e versões; agrupa pedido mis
   try {
     const catalog = register.products();
     const result = importHistory(db, source());
-    assert.deepEqual(result, { importedOrders: 5, importedRows: 6, importedClosedDays: 1, alreadyImported: false });
+    assert.deepEqual(result, { importedOrders: 5, importedRows: 6, importedClosedDays: 1, reconciledProducts: 0, alreadyImported: false });
     assert.deepEqual(register.products(), catalog);
     assert.deepEqual(register.sales().find(sale => sale.id === nativeSale.id), nativeSale);
     assert.deepEqual(register.createSale(input), nativeSale);
@@ -146,7 +147,7 @@ test('CLI salva backup v2 antes de migrar e o histórico sobrevive ao reabrir o 
   let db: Database.Database | undefined;
   try {
     const data = fixture(path); db = data.db;
-    const before = rows(db).slice(0, -1); db.exec('DROP TABLE spreadsheet_records; PRAGMA user_version=2'); db.close(); db = undefined;
+    legacyDatabase(db,2); const before = rowsLegacy(db); db.close(); db = undefined;
     const manifest = join(folder, 'historico.json'); writeFileSync(manifest, JSON.stringify(source()));
     const sourceBefore = readFileSync(manifest);
     const result = spawnSync(process.execPath, ['--import', 'tsx', join(projectRoot, 'apps/api/src/import-history.ts'), manifest],
@@ -162,6 +163,51 @@ test('CLI salva backup v2 antes de migrar e o histórico sobrevive ao reabrir o 
     assert.equal(register.day('2026-10-09').summary.netCents, 5862); assert.equal(register.products()[0].stock, 9);
     assert.equal(importHistory(db, source()).alreadyImported, true);
   } finally { if (db?.open) db.close(); rmSync(folder, { recursive: true, force: true }); }
+});
+
+const rowsLegacy = (db: Database.Database) => tables.slice(0,-1).map(table => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+
+test('conciliação explícita absorve vendas novas da planilha sem baixar novamente o histórico nem a venda nativa', () => {
+  const { db,register,nativeSale } = fixture();
+  try {
+    const input = source(); input.products[0].stock = 8;
+    const before = rows(db);
+    assert.throws(() => importHistory(db,input), /Estoque/); assert.deepEqual(rows(db),before);
+    const result = importHistory(db,input,{ reconcileStock:true });
+    assert.equal(result.reconciledProducts,1); assert.equal(register.products()[0].stock,7);
+    assert.equal(register.products()[0].version,3);
+    assert.deepEqual(register.sales().find(sale => sale.id === nativeSale.id),nativeSale);
+    const adjustment = db.prepare('SELECT * FROM stock_adjustments').get() as { before_stock:number; after_stock:number; reason:string };
+    assert.equal(adjustment.before_stock,9); assert.equal(adjustment.after_stock,7); assert.match(adjustment.reason,/Conciliação inicial/);
+    const saved = rows(db); assert.equal(importHistory(db,input,{reconcileStock:true}).alreadyImported,true); assert.deepEqual(rows(db),saved);
+  } finally { db.close(); }
+});
+
+test('conciliação recusa saldo desconhecido/negativo e falha financeira não altera estoque nem feira', () => {
+  const { db } = fixture();
+  try {
+    const before = rows(db), fair = db.prepare('SELECT * FROM fairs').all();
+    const invalid = source(); invalid.products[0].stock=8; invalid.expected.netCents=1;
+    const unknown = source(); unknown.products[0].stock=null;
+    const negative = source(); negative.products[0].stock=0;
+    for (const input of [invalid,unknown,negative]) {
+      assert.throws(() => importHistory(db,input,{reconcileStock:true}),/diverge|Estoque/);
+      assert.deepEqual(rows(db),before); assert.deepEqual(db.prepare('SELECT * FROM fairs').all(),fair);
+    }
+  } finally { db.close(); }
+});
+
+test('contagem física que já inclui saídas novas do ODS não é reduzida novamente pela conciliação', () => {
+  const { db,register,input }=fixture();
+  try {
+    register.createSale({...input,requestId:randomUUID()});
+    const product=register.products()[0]; assert.equal(product.stock,8);
+    register.saveProduct({...product,stock:5,expectedVersion:product.version},product.id);
+    const current=source(); current.products[0].stock=7;
+    const before=rows(db);
+    assert.throws(()=>importHistory(db,current,{reconcileStock:true}),/contagem manual/);
+    assert.deepEqual(rows(db),before); assert.equal(register.products()[0].stock,5);
+  } finally { db.close(); }
 });
 
 const actualSource = join(projectRoot, 'data/historico-planilha.json');

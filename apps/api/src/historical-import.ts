@@ -47,7 +47,7 @@ function reconcile(summary: Summary, expected: HistoricalInput['expected'], labe
 }
 
 // Uma migração inicial com repetição segura. Não é sincronização com uma planilha ainda em uso.
-export function importHistory(db: Database.Database, untrustedInput: unknown) {
+export function importHistory(db: Database.Database, untrustedInput: unknown, options: { reconcileStock?: boolean } = {}) {
   const input = historySchema.parse(untrustedInput);
   return db.transaction(() => {
     const register = new CashRegister(db);
@@ -61,8 +61,10 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
     if (existing.length) {
       requireCondition(existing.length === records.length && records.every(record => existing.some(saved => saved.record_key === record.key && saved.payload_hash === record.hash)),
         'A planilha mudou desde a migração. Reimportação recusada para preservar pedidos, fechamentos e estoque.');
-      return { importedOrders: 0, importedRows: 0, importedClosedDays: 0, alreadyImported: true };
+      return { importedOrders: 0, importedRows: 0, importedClosedDays: 0, reconciledProducts: 0, alreadyImported: true };
     }
+    requireCondition(register.fairId === 1 && register.fairs().length === 1 && !register.fair().closedAt,
+      'A migração inicial da planilha precisa ocorrer antes de encerrar ou criar outra feira.');
 
     const products = register.products();
     const matchProduct = (productName: string) => {
@@ -71,6 +73,7 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
       return matches[0]!;
     };
     const nativeSales = register.sales();
+    const stockChanges: { id: number; before: number; after: number }[] = [];
     // O seed usou o saldo da planilha: ele já inclui as saídas históricas.
     // A diferença permitida vem das saídas e contagens realizadas no aplicativo.
     for (const sourceProduct of input.products) {
@@ -86,15 +89,21 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
       const consumed = nativeSales.filter(sale => sale.origin === 'Aplicativo' && sale.status === 'Pago')
         .flatMap(sale => sale.items).filter(item => item.productId === product.id).reduce((sum, item) => sum + item.quantity, 0);
       const expectedStock = baseline === null ? null : baseline - consumed;
-      requireCondition(product.stock === expectedStock, `Estoque de ${product.name} não corresponde ao saldo da planilha mais os movimentos do aplicativo. Nada foi importado.`);
+      if (product.stock !== expectedStock) {
+        requireCondition(!options.reconcileStock || adjustments.length === 0,
+          `Estoque de ${product.name}: há contagem manual sem vínculo com o snapshot da planilha. Confira o saldo; conciliação automática recusada.`);
+        requireCondition(options.reconcileStock && product.stock !== null && expectedStock !== null && expectedStock >= 0 && expectedStock <= 1_000_000,
+          `Estoque de ${product.name} não corresponde ao saldo da planilha mais os movimentos do aplicativo. Nada foi importado.`);
+        stockChanges.push({ id: product.id, before: product.stock, after: expectedStock });
+      }
     }
     for (const row of input.rows) {
       requireCondition(input.products.some(product => product.name === row.name), `Produto da venda ausente no saldo: ${row.name}.`);
-      const closed = db.prepare('SELECT closed_at FROM days WHERE date=?').get(row.date) as { closed_at: string | null } | undefined;
+      const closed = db.prepare('SELECT closed_at FROM days WHERE fair_id=? AND date=?').get(register.fairId, row.date) as { closed_at: string | null } | undefined;
       requireCondition(!closed?.closed_at, `O dia ${row.date} já está fechado no aplicativo. O histórico não foi alterado.`);
     }
     for (const day of input.closedDays) {
-      requireCondition(!db.prepare('SELECT date FROM days WHERE date=?').get(day.date), `Já existe um registro de caixa em ${day.date}. O fechamento foi preservado.`);
+      requireCondition(!db.prepare('SELECT date FROM days WHERE fair_id=? AND date=?').get(register.fairId, day.date), `Já existe um registro de caixa em ${day.date}. O fechamento foi preservado.`);
     }
 
     const groups = new Map<string, HistoricalRow[]>();
@@ -104,7 +113,7 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
     }
     const importedAt = new Date().toISOString();
     const historicalSales: Sale[] = [];
-    const insertRecord = db.prepare(`INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,day_date,source_sha256,imported_at) VALUES(?,?,?,?,?,?,?)`);
+    const insertRecord = db.prepare(`INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,day_date,source_sha256,imported_at,fair_id) VALUES(?,?,?,?,?,?,?,?)`);
     const insertItem = db.prepare(`INSERT INTO sale_items(sale_id,product_id,name,owner_id,owner_name,quantity,price_cents,discount_cents,fee_cents,gross_cents,total_cents,net_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const rows of groups.values()) {
       const first = rows[0]!;
@@ -123,14 +132,14 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
         return item;
       });
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
-      const sale: Sale = { id: randomUUID(), date: first.date, paymentDate: first.status === 'Pago' ? first.date : null,
+      const sale: Sale = { id: randomUUID(), fairId: register.fairId, date: first.date, paymentDate: first.status === 'Pago' ? first.date : null,
         paymentMethod: first.paymentMethod, status: first.status, note, createdAt: importedAt, origin: 'Planilha', items,
         grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents') };
-      db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at) VALUES(?,?,?,?,?,?,?,?)')
-        .run(sale.id, hash(rows), sale.date, sale.paymentDate, sale.paymentMethod, sale.status, sale.note, importedAt);
+      db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at,fair_id) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(sale.id, hash(rows), sale.date, sale.paymentDate, sale.paymentMethod, sale.status, sale.note, importedAt, register.fairId);
       for (const item of items) insertItem.run(sale.id, item.productId, item.name, item.ownerId, item.ownerName, item.quantity, item.priceCents,
         item.discountCents, item.feeCents, item.grossCents, item.totalCents, item.netCents);
-      for (const row of rows) insertRecord.run(input.sourceKey, `Vendas:${row.rowNumber}`, hash(row), sale.id, null, input.sha256, importedAt);
+      for (const row of rows) insertRecord.run(input.sourceKey, `Vendas:${row.rowNumber}`, hash(row), sale.id, null, input.sha256, importedAt, register.fairId);
       historicalSales.push(sale);
     }
     reconcile(summarize(historicalSales, register.owners()), input.expected, 'Total histórico');
@@ -142,10 +151,18 @@ export function importHistory(db: Database.Database, untrustedInput: unknown) {
       requireCondition(closing.expectedCents === null || closing.expectedCents === expectedCents, `Dinheiro esperado divergente em ${closing.date}.`);
       requireCondition(closing.differenceCents === null || closing.differenceCents === differenceCents, `Contagem divergente em ${closing.date}.`);
       const day: Day = { ...closing.cash, date: closing.date, summary, expectedCents, differenceCents, closedAt: importedAt };
-      db.prepare('INSERT INTO days(date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note,closed_at,snapshot) VALUES(?,?,?,?,?,?,?,?)')
-        .run(day.date, day.openingCents, day.extraCents, day.withdrawalCents, day.countedCents, day.note, importedAt, JSON.stringify(day));
-      insertRecord.run(input.sourceKey, `Histórico:${day.date}`, hash(closing), null, day.date, input.sha256, importedAt);
+      db.prepare('INSERT INTO days(fair_id,date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note,closed_at,snapshot) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(register.fairId, day.date, day.openingCents, day.extraCents, day.withdrawalCents, day.countedCents, day.note, importedAt, JSON.stringify(day));
+      insertRecord.run(input.sourceKey, `Histórico:${day.date}`, hash(closing), null, day.date, input.sha256, importedAt, register.fairId);
     }
-    return { importedOrders: historicalSales.length, importedRows: input.rows.length, importedClosedDays: input.closedDays.length, alreadyImported: false };
+    for (const change of stockChanges) {
+      db.prepare('UPDATE products SET stock=?,version=version+1 WHERE id=?').run(change.after,change.id);
+      db.prepare('INSERT INTO stock_adjustments(product_id,before_stock,after_stock,reason,created_at) VALUES(?,?,?,?,?)')
+        .run(change.id,change.before,change.after,'Conciliação inicial do saldo salvo na planilha',importedAt);
+    }
+    const firstDate = [...input.rows.map(row => row.date),...input.closedDays.map(day => day.date)].sort()[0]!;
+    db.prepare('UPDATE fairs SET start_date=MIN(start_date,?) WHERE id=?').run(firstDate,register.fairId);
+    return { importedOrders: historicalSales.length, importedRows: input.rows.length, importedClosedDays: input.closedDays.length,
+      reconciledProducts: stockChanges.length, alreadyImported: false };
   }).immediate();
 }

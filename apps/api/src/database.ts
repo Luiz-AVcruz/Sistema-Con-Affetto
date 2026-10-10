@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const schemaVersion = 3;
+export const schemaVersion = 4;
 
 export function openDatabase(path: string): Database.Database {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -65,6 +65,46 @@ export function openDatabase(path: string): Database.Database {
         CHECK((sale_id IS NULL) <> (day_date IS NULL))
       ); PRAGMA user_version = 3;`);
     })();
+    if (version < 4) {
+      // A troca da chave de days exige reconstruir também seu vínculo de origem.
+      // SQLite só permite mudar foreign_keys fora da transação.
+      db.pragma('foreign_keys = OFF');
+      try {
+        db.transaction(() => {
+          db.exec(`CREATE TABLE fairs (
+            id INTEGER PRIMARY KEY, name TEXT NOT NULL, target_cents INTEGER CHECK(target_cents IS NULL OR target_cents > 0),
+            start_date TEXT NOT NULL, end_date TEXT, created_at TEXT NOT NULL, closed_at TEXT, snapshot TEXT
+          );
+          CREATE UNIQUE INDEX one_active_fair ON fairs((1)) WHERE closed_at IS NULL;`);
+          const firstDate = (db.prepare('SELECT MIN(date) AS date FROM (SELECT date FROM sales UNION ALL SELECT date FROM days)').get() as { date: string | null }).date;
+          const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+          db.prepare('INSERT INTO fairs(id,name,start_date,created_at) VALUES(1,?,?,?)').run('Feira atual', firstDate ?? today, new Date().toISOString());
+          db.exec(`ALTER TABLE sales ADD COLUMN fair_id INTEGER NOT NULL DEFAULT 1 REFERENCES fairs(id);
+          CREATE INDEX sales_fair_date ON sales(fair_id,date);
+          CREATE TABLE days_v4 (
+            fair_id INTEGER NOT NULL REFERENCES fairs(id), date TEXT NOT NULL,
+            opening_cents INTEGER NOT NULL, extra_cents INTEGER NOT NULL, withdrawal_cents INTEGER NOT NULL,
+            counted_cents INTEGER, note TEXT NOT NULL, closed_at TEXT, snapshot TEXT,
+            PRIMARY KEY(fair_id,date)
+          );
+          INSERT INTO days_v4 SELECT 1,date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note,closed_at,snapshot FROM days;
+          DROP TABLE days;
+          ALTER TABLE days_v4 RENAME TO days;
+          CREATE TABLE spreadsheet_records_v4 (
+            source_key TEXT NOT NULL, record_key TEXT NOT NULL, payload_hash TEXT NOT NULL,
+            sale_id TEXT REFERENCES sales(id), day_date TEXT, source_sha256 TEXT NOT NULL, imported_at TEXT NOT NULL,
+            fair_id INTEGER NOT NULL REFERENCES fairs(id), PRIMARY KEY(source_key,record_key),
+            UNIQUE(fair_id,day_date), FOREIGN KEY(fair_id,day_date) REFERENCES days(fair_id,date),
+            CHECK((sale_id IS NULL) <> (day_date IS NULL))
+          );
+          INSERT INTO spreadsheet_records_v4 SELECT source_key,record_key,payload_hash,sale_id,day_date,source_sha256,imported_at,1 FROM spreadsheet_records;
+          DROP TABLE spreadsheet_records;
+          ALTER TABLE spreadsheet_records_v4 RENAME TO spreadsheet_records;`);
+          if ((db.pragma('foreign_key_check') as unknown[]).length) throw new Error('A migração encontrou referências inconsistentes. Nada foi migrado para v4.');
+          db.pragma('user_version = 4');
+        }).immediate();
+      } finally { db.pragma('foreign_keys = ON'); }
+    }
     return db;
   } catch (error) { db.close(); throw error; }
 }

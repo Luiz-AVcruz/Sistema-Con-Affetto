@@ -1,12 +1,14 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { paymentMethods, type PaymentMethod, type Product } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, parseMoney } from '../../core/money';
 
 interface CartItem { product: Product; quantity: number; discount: string; fee: string }
-interface Draft { version: 1; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string }
-const draftKey = 'caixa-feira-draft-v1';
+interface Draft { version: 2; fairId: number; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string }
+interface LegacyDraft { version: 1; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string }
+const legacyDraftKey = 'caixa-feira-draft-v1';
+const draftKey = (fairId: number) => `caixa-feira-draft-v2-${fairId}`;
 
 @Component({ selector: 'app-sales', standalone: true, imports: [FormsModule], templateUrl: './sales.component.html' })
 export class SalesComponent {
@@ -25,28 +27,65 @@ export class SalesComponent {
   note = '';
   draftDate = this.store.date();
   private requestId: string = crypto.randomUUID();
+  private loadedFairId: number | null = null;
 
   constructor() {
+    effect(() => {
+      const data = this.store.data();
+      if (!data || data.fair.id === this.loadedFairId) return;
+      this.loadedFairId = data.fair.id;
+      this.loadDraft(data.fair.id, data.fairs.reduce((oldest, fair) => Math.min(oldest, fair.id), data.fair.id));
+    });
+  }
+
+  private validDraft(value: unknown): value is Draft | LegacyDraft {
+    if (!value || typeof value !== 'object') return false;
+    const draft = value as { version?: number; fairId?: number; items?: CartItem[]; method?: PaymentMethod; status?: string; requestId?: string; date?: string; note?: string };
+    return (draft.version === 1 || draft.version === 2) && Array.isArray(draft.items) && draft.items.every(item => item && item.product && Number.isInteger(item.product.id) && Number.isInteger(item.quantity) && item.quantity > 0 && typeof item.discount === 'string' && typeof item.fee === 'string') && paymentMethods.includes(draft.method as PaymentMethod) && ['Pago', 'Pendente'].includes(draft.status ?? '') && typeof draft.requestId === 'string' && typeof draft.date === 'string' && typeof draft.note === 'string' && (draft.version === 1 || Number.isInteger(draft.fairId));
+  }
+
+  private loadDraft(fairId: number, oldestFairId: number): void {
     try {
-      const raw = localStorage.getItem(draftKey);
+      const key = draftKey(fairId);
+      const raw = localStorage.getItem(key);
       if (raw) {
-        const draft: Draft = JSON.parse(raw);
-        if (draft.version !== 1 || !Array.isArray(draft.items) || !draft.items.every(item => item.product && Number.isInteger(item.product.id) && Number.isInteger(item.quantity) && item.quantity > 0 && typeof item.discount === 'string' && typeof item.fee === 'string') || !paymentMethods.includes(draft.method) || !['Pago', 'Pendente'].includes(draft.status) || typeof draft.requestId !== 'string' || typeof draft.date !== 'string' || typeof draft.note !== 'string') throw new Error('Rascunho inválido');
+        const draft: unknown = JSON.parse(raw);
+        if (!this.validDraft(draft) || draft.version !== 2 || draft.fairId !== fairId) throw new Error('Rascunho inválido ou associado a outra feira');
         this.cart.set(draft.items); this.method = draft.method; this.status = draft.status;
         this.note = draft.note; this.requestId = draft.requestId; this.draftDate = draft.date;
-      }
-    } catch { this.store.error.set('Não foi possível ler o rascunho local. Os pedidos registrados continuam no histórico.'); }
+      } else if (fairId === oldestFairId) {
+        const legacy = localStorage.getItem(legacyDraftKey);
+        if (legacy) {
+          const previous: unknown = JSON.parse(legacy);
+          if (!this.validDraft(previous) || previous.version !== 1) throw new Error('Rascunho antigo inválido');
+          const migrated: Draft = { ...previous, version: 2, fairId };
+          localStorage.setItem(key, JSON.stringify(migrated));
+          localStorage.removeItem(legacyDraftKey);
+          this.cart.set(migrated.items); this.method = migrated.method; this.status = migrated.status;
+          this.note = migrated.note; this.requestId = migrated.requestId; this.draftDate = migrated.date;
+        } else this.resetEmptyDraft();
+      } else this.resetEmptyDraft();
+    } catch {
+      this.cart.set([]); this.requestId = crypto.randomUUID(); this.note = ''; this.method = 'Dinheiro'; this.status = 'Pago'; this.draftDate = this.store.date();
+      this.store.error.set('Não foi possível ler o rascunho desta feira. Os pedidos registrados continuam no histórico.');
+    }
+  }
+
+  private resetEmptyDraft(): void {
+    this.cart.set([]); this.requestId = crypto.randomUUID(); this.note = ''; this.method = 'Dinheiro'; this.status = 'Pago'; this.draftDate = this.store.date();
   }
 
   persist(): void {
+    const fairId = this.loadedFairId;
+    if (fairId === null) return;
     try {
-      const draft: Draft = { version: 1, requestId: this.requestId, date: this.draftDate, items: this.cart(), method: this.method, status: this.status, note: this.note };
-      localStorage.setItem(draftKey, JSON.stringify(draft));
+      const draft: Draft = { version: 2, fairId, requestId: this.requestId, date: this.draftDate, items: this.cart(), method: this.method, status: this.status, note: this.note };
+      localStorage.setItem(draftKey(fairId), JSON.stringify(draft));
     } catch { this.store.error.set('O navegador não conseguiu guardar o rascunho. Registre o pedido antes de fechar a página.'); }
   }
 
   add(product: Product): void {
-    if (this.store.busy() || this.store.data()?.day.closedAt) return;
+    if (this.store.busy() || this.store.data()?.fair.closedAt || this.store.data()?.day.closedAt) return;
     if (this.cart().length && this.draftDate !== this.store.date()) { this.store.error.set('O rascunho pertence a outro dia. Selecione essa data ou limpe o pedido.'); return; }
     if (!this.cart().length) this.draftDate = this.store.date();
     const existing = this.cart().find(item => item.product.id === product.id);
@@ -78,8 +117,12 @@ export class SalesComponent {
     } catch { return null; }
   }
   async submit(): Promise<void> {
+    const fairId = this.store.data()?.fair.id;
+    if (fairId === undefined || fairId !== this.loadedFairId || this.store.data()?.fair.closedAt) {
+      this.store.error.set('Este rascunho pertence a uma feira encerrada ou diferente da selecionada.'); return;
+    }
     try {
-      const saved = await this.store.saveSale({ requestId: this.requestId, date: this.draftDate,
+      const saved = await this.store.saveSale({ fairId, requestId: this.requestId, date: this.draftDate,
         paymentMethod: this.method, status: this.status, note: this.note,
         items: this.cart().map(item => ({ productId: item.product.id, quantity: item.quantity,
           expectedPriceCents: item.product.priceCents, discountCents: parseMoney(item.discount), feeCents: parseMoney(item.fee) })) });

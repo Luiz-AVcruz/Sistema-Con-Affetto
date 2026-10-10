@@ -4,7 +4,7 @@
 
 O catálogo inicial recebe o estoque disponível salvo no ODS. Esse saldo já desconta as vendas pagas da planilha, incluindo permutas e brindes. Recriar essas vendas pelo caminho comum de registro baixaria o estoque uma segunda vez. Também recalcularia itens com o preço e participante atuais, apagando a informação que estava salva na linha.
 
-A migração lê os valores salvos de cada venda, insere os snapshots e preserva o catálogo inteiro, incluindo estoque e versão de edição. Ela conserva os pedidos já feitos no aplicativo. Não modifica ou recalcula a planilha.
+A migração lê os valores salvos de cada venda e insere seus snapshots, preservando pedidos já feitos no aplicativo. No modo padrão, o catálogo inteiro, incluindo estoque e versão de edição, deve corresponder ao saldo esperado. A conciliação explícita descrita abaixo permite atualizar saldos numéricos de uma planilha que recebeu vendas depois do catálogo inicial. O procedimento não modifica ou recalcula a planilha.
 
 ## Caminho dos dados
 
@@ -37,6 +37,12 @@ saldo esperado no app = saldo disponível no ODS
 Pendentes e cancelados não consomem esse saldo. Permuta e brinde pagos consomem unidades. Um estoque desconhecido permanece `null`. Contagens que passam entre desconhecido e conhecido exigem conciliação específica; o comando recusa esse caso sem mudar quantidades.
 
 Esta conferência pressupõe que o catálogo foi inicializado com o saldo desse snapshot, antes dos movimentos nativos. Ela detecta divergências numéricas; não identifica uma mesma compra digitada nas duas fontes. Revise essa sobreposição antes da troca. Alterações de nome no cadastro também impedem resolver o vínculo automaticamente; dois produtos com o mesmo nome são recusados.
+
+Se o ODS recebeu novas vendas depois do catálogo inicial, ensaie a migração em uma cópia e use `npm run import:history -- --reconcile-stock`. O mesmo saldo esperado é usado, mas diferenças entre quantidades conhecidas podem ser aplicadas na transação de importação. Cada mudança incrementa a versão de edição e gera um ajuste com motivo `Conciliação inicial do saldo salvo na planilha`. Saldos negativos ou mudanças entre conhecido e desconhecido continuam recusados. Erro financeiro ou de fechamento desfaz a importação e a conciliação juntas. Repetir os registros já importados não aplica novos ajustes.
+
+A conciliação automática de um saldo divergente é recusada se o produto já teve contagem manual no aplicativo. A contagem pode ter incluído saídas novas do ODS, e não há informação suficiente para descontá-las de novo com segurança. O operador precisa conferir esse caso em separado; não se deve remover os ajustes para contornar a proteção.
+
+A importação inicial só pode ocorrer na primeira feira ainda aberta, antes de criar outro evento. A menor data importada passa a compor a data inicial da feira.
 
 Os valores das linhas são recalculados a partir dos snapshots salvos para conferir total e líquido. Depois, recebido, líquido, desconto, taxa, pendência, unidades de permuta/brinde, partes por participante e pagamentos monetários precisam reconciliar com os resumos do ODS.
 

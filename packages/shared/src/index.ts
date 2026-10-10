@@ -16,6 +16,7 @@ export interface SaleItemInput {
 }
 export interface SaleInput {
   requestId: string; date: string; paymentMethod: PaymentMethod;
+  fairId?: number;
   status: 'Pago' | 'Pendente'; note: string; items: SaleItemInput[];
 }
 export interface SaleItem extends SaleItemInput {
@@ -23,7 +24,7 @@ export interface SaleItem extends SaleItemInput {
   grossCents: number; totalCents: number; netCents: number;
 }
 export interface Sale {
-  id: string; date: string; paymentDate: string | null; paymentMethod: PaymentMethod;
+  id: string; fairId: number; date: string; paymentDate: string | null; paymentMethod: PaymentMethod;
   status: SaleStatus; note: string; createdAt: string; origin: 'Aplicativo' | 'Planilha'; items: SaleItem[];
   grossCents: number; discountCents: number; feeCents: number;
   totalCents: number; netCents: number;
@@ -42,7 +43,12 @@ export interface Day extends CashInput {
   date: string; closedAt: string | null; summary: Summary;
   expectedCents: number; differenceCents: number | null;
 }
+export interface FairInput { name: string; targetCents: number | null }
+export interface Fair extends FairInput {
+  id: number; startDate: string; endDate: string | null; createdAt: string; closedAt: string | null; summary: Summary;
+}
 export interface Bootstrap {
+  fair: Fair; fairs: Fair[]; activeFairId: number | null;
   owners: Owner[]; products: Product[]; sales: Sale[]; day: Day;
   total: Summary; closedDays: Day[];
 }

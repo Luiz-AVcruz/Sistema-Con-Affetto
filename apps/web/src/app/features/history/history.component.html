@@ -1,5 +1,5 @@
 <section class="panel">
-  <div class="section-heading"><h2>Histórico de pedidos</h2><div class="button-row"><a class="secondary" href="/api/export/sales.csv" download>Exportar CSV</a><a class="secondary" href="/api/backup" download>Baixar backup</a></div></div>
+  <div class="section-heading"><h2>Histórico de pedidos</h2><div class="button-row"><a class="secondary" [href]="'/api/export/sales.csv?fairId=' + store.data()?.fair?.id" download>Exportar CSV desta feira</a><a class="secondary" href="/api/export/fairs.csv" download>Resumo das feiras</a><a class="secondary" href="/api/backup" download>Baixar backup completo</a></div></div>
   <label class="checkbox-label"><input type="checkbox" [ngModel]="allDates()" (ngModelChange)="allDates.set($event)">Mostrar todos os dias</label>
   <p class="muted">{{ allDates() ? 'Exibe o histórico completo.' : 'Exibe os pedidos e recebimentos da data selecionada, além das pendências anteriores.' }} Receber uma pendência registra o pagamento em {{ dayLabel(store.date()) }}.</p>
   @for (sale of sales(); track sale.id) {
@@ -9,8 +9,8 @@
       @if (sale.note) { <p class="muted">{{ sale.note }}</p> }
       @if (sale.status !== 'Cancelado') {
         <div class="order-actions">
-          @if (sale.status === 'Pendente') { <div class="button-row receipt-actions"><label>Forma de recebimento<select [ngModel]="receiptMethods[sale.id] || sale.paymentMethod" (ngModelChange)="receiptMethods[sale.id] = $event" [disabled]="store.busy() || !!store.data()?.day?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label><button class="primary" (click)="receive(sale)" [disabled]="store.busy() || !!store.data()?.day?.closedAt">Receber pendência</button></div> }
-          <div class="cancel-action"><button type="button" class="cancel-order" (click)="cancel(sale)" [disabled]="store.busy() || (sale.status === 'Pago' && paymentClosed(sale))">Cancelar pedido</button>@if (sale.status === 'Pago' && paymentClosed(sale)) { <small>Dia fechado</small> }</div>
+          @if (sale.status === 'Pendente') { <div class="button-row receipt-actions"><label>Forma de recebimento<select [ngModel]="receiptMethods[sale.id] || sale.paymentMethod" (ngModelChange)="receiptMethods[sale.id] = $event" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label><button class="primary" (click)="receive(sale)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt">Receber pendência</button></div> }
+          <div class="cancel-action"><button type="button" class="cancel-order" (click)="cancel(sale)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || (sale.status === 'Pago' && paymentClosed(sale))">Cancelar pedido</button>@if (store.data()?.fair?.closedAt) { <small>Feira encerrada</small> } @else if (sale.status === 'Pago' && paymentClosed(sale)) { <small>Dia fechado</small> }</div>
         </div>
       }
     </article>
