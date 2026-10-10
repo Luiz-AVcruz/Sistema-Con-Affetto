@@ -9,3 +9,5 @@ data/*
 .env
 test-results/
 playwright-report/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/resources/

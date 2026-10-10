@@ -1,0 +1,16 @@
+{
+  "name": "@caixa/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:resources": "node ../../scripts/desktop-prepare.mjs",
+    "dev": "npm run prepare:resources && cargo run --manifest-path src-tauri/Cargo.toml",
+    "build": "npm run prepare:resources && tauri build --no-bundle",
+    "install:local": "node ../../scripts/desktop-install.mjs",
+    "smoke:backend": "node ../../scripts/desktop-runtime-smoke.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

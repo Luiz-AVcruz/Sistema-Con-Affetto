@@ -1,18 +1,20 @@
 # Caixa da feira
 
-Aplicativo local em **Angular + TypeScript**, **Node + Express** e **SQLite**. A primeira versão atende um operador no notebook e funciona sem internet depois da instalação das dependências. O Node serve a interface compilada e a API no mesmo endereço: `http://127.0.0.1:3333`.
+Aplicativo local em **Tauri**, **Angular + TypeScript**, **Node + Express** e **SQLite**. Atende um operador no notebook e funciona sem internet depois da instalação. A prioridade é facilitar o caixa do comércio, preservar o histórico e permitir exportação e recuperação.
 
-O projeto também é uma referência de estudo. O desafio futuro é reconstruir o backend em Rust, preservando o comportamento verificável e reaproveitando a interface Angular.
+O Tauri abre uma janela própria e gerencia o backend local. A interface web permanece disponível para desenvolvimento e validação. A documentação de estudo anterior é secundária; reconstruir regras em outra linguagem não é requisito para usar o caixa.
 
 ## Estado da primeira versão
 
-Esta versão é um protótipo para validação. Ela registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelamentos, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, total da feira, exportação CSV e backup SQLite.
+Registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelamentos, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, meta e encerramento de feiras, histórico de eventos, exportação CSV e backup SQLite.
 
 O catálogo, os pedidos e os fechamentos podem ser extraídos da última versão **salva** da planilha. A migração inicial preserva pedidos já feitos no aplicativo e não baixa novamente o estoque das vendas antigas. O histórico abre com todos os dias visíveis. Pedidos do aplicativo mostram data e hora de registro; pedidos da planilha indicam que o horário não foi registrado na origem.
 
 Antes de usar o aplicativo como caixa principal: conferir o catálogo, o histórico e a contagem atual; validar os cenários de atendimento; ensaiar backup/restauração; implementar um procedimento de retificação de dias fechados se esse recurso for necessário. A primeira versão bloqueia alterações financeiras em dias fechados.
 
 ## Executar
+
+Para o aplicativo desktop, consulte [instalação e operação local](docs/11-desktop.md). O fluxo abaixo executa a interface web de desenvolvimento/validação.
 
 Requisitos: Node 24 LTS, npm e um navegador atual. As versões exatas das dependências estão no `package-lock.json`. Não é necessário instalar um servidor de banco de dados.
 
@@ -49,7 +51,7 @@ Para começar sem a planilha, cadastre participantes e produtos pela interface. 
 
 ## Histórico da planilha
 
-Depois de extrair a planilha e inicializar o catálogo, encerre o aplicativo com `Ctrl+C` e execute:
+Depois de extrair a planilha e inicializar o catálogo, feche a janela do aplicativo (ou use `Ctrl+C` no modo web) e execute:
 
 ```bash
 npm run import:history
@@ -58,6 +60,14 @@ npm start
 ```
 
 O comando cria um backup completo em `data/backups/` antes de atualizar o esquema ou importar. Ele confere os totais por participante e pagamento, os fechamentos e a compatibilidade do estoque. Se houver divergência, os registros da importação são desfeitos juntos. Não execute `seed` novamente se o catálogo já existe.
+
+Se o saldo salvo mudou porque a planilha recebeu novas vendas depois do catálogo inicial, ensaie em uma cópia e use a conciliação explícita:
+
+```bash
+npm run import:history -- --reconcile-stock
+```
+
+Ela registra os ajustes necessários no saldo atual, considerando os movimentos nativos do aplicativo, sem baixar novamente todo o histórico. Saldos desconhecidos não são convertidos automaticamente. Faça a migração antes de encerrar a primeira feira. Consulte [metas, feiras e exportações](docs/10-feiras.md).
 
 A repetição da mesma origem não duplica pedidos nem desfaz recebimentos ou cancelamentos feitos no programa. Linhas novas, removidas ou alteradas no ODS depois da migração são recusadas: esse procedimento não sincroniza dois caixas em uso paralelo. O detalhe e o roteiro de conferência estão em [docs/09-importacao-historico.md](docs/09-importacao-historico.md).
 

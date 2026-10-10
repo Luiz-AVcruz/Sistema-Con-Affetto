@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Caixa da Feira</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; background: #f6f3e9; color: #20342d; }
+    body { max-width: 42rem; margin: 10vh auto; padding: 0 1.5rem; }
+    main { padding: 2rem; background: #fff; border: 1px solid #d9e2dc; border-radius: 1rem; box-shadow: 0 1rem 3rem #17382b12; }
+    h1 { margin-top: 0; color: #176b52; }
+    code { background: #edf3ef; border-radius: .3rem; padding: .1rem .3rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>O caixa não conseguiu iniciar</h1>
+    <p id="detail">O servidor local não confirmou que estava pronto. Feche outra janela do caixa e tente abrir novamente.</p>
+    <p>Feche esta janela antes de corrigir a falha e abrir o caixa novamente.</p>
+  </main>
+  <script>document.querySelector('#detail').textContent = window.__CAIXA_STARTUP_ERROR__ || document.querySelector('#detail').textContent;</script>
+</body>
+</html>

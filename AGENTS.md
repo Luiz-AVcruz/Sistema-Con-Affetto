@@ -1,8 +1,8 @@
 # Instruções do projeto
 
 - Responder em português do Brasil, de forma direta, com resultados e limites sustentados por evidência.
-- Este é um aplicativo local, de operador único. Preservar Angular, Node/TypeScript e SQLite até uma mudança explícita de escopo.
-- Manter documentação de estudo: explicar regra, responsabilidade, decisão e teste. Atualizar o documento correspondente quando mudar comportamento ou contrato.
+- Este é um aplicativo local, de operador único. A prioridade é utilidade e conveniência no comércio. Usar Tauri como aplicativo desktop, reaproveitando Angular, Node/TypeScript e SQLite.
+- Manter documentação de uso, recuperação e decisões técnicas. Material de estudo existente é secundário e não deve aumentar o escopo da operação.
 - O backend em Rust é um desafio futuro da pessoa desenvolvedora. Não implementar essa versão inteira automaticamente; seguir o escopo explicitamente pedido em cada exercício.
 - Não modificar a planilha do comércio nem inserir vendas de teste no banco de uso. Testes e exercícios devem usar bancos temporários ou um `CAIXA_DB` separado.
 - Preservar centavos inteiros, transações completas, idempotência, dados históricos dos itens e snapshots dos dias fechados.

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Caixa da Feira",
+  "version": "0.1.0",
+  "identifier": "br.com.caixadafeira.local",
+  "build": {
+    "frontendDist": "resources/frontend"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "resources": ["resources/"],
+    "category": "Office",
+    "shortDescription": "Caixa local para a feira"
+  }
+}
