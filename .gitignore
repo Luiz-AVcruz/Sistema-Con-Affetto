@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.angular/
+data/*
+!data/.gitkeep
+*.sqlite*
+*.log
+.env
+test-results/
+playwright-report/

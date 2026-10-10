@@ -1,0 +1,24 @@
+<div class="two-columns">
+  <section class="panel">
+    <div class="section-heading"><h2>Cadastro e estoque</h2><span>{{ store.data()?.products?.length }} produtos</span></div>
+    <p class="muted">O estoque informado aqui é a contagem atual disponível. Vazio significa A contar.</p>
+    <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Participante</th><th>Preço</th><th>Estoque</th><th></th></tr></thead><tbody>
+      @for (product of store.data()?.products; track product.id) {
+        <tr><td><strong>{{ product.name }}</strong><small>{{ product.description }}{{ product.active ? '' : ' · Inativo' }}</small></td><td>{{ product.ownerName }}</td><td class="number">{{ money(product.priceCents) }}</td><td class="number">{{ product.stock === null ? 'A contar' : product.stock }}</td><td><button class="secondary" (click)="edit(product)" [disabled]="store.busy()">Editar</button></td></tr>
+      } @empty { <tr><td colspan="5">Nenhum produto cadastrado.</td></tr> }
+    </tbody></table></div>
+  </section>
+  <section class="panel">
+    <div class="section-heading"><h2>{{ editId ? 'Editar produto' : 'Novo produto' }}</h2>@if (editId) { <button class="text-button" (click)="clear()">Novo</button> }</div>
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <label>Nome<input formControlName="name" maxlength="100"></label>
+      <label>Peso ou descrição<input formControlName="description" maxlength="200" placeholder="Opcional"></label>
+      <label>Participante<select formControlName="ownerId"><option [ngValue]="0">Selecione</option>@for (owner of store.data()?.owners; track owner.id) { <option [ngValue]="owner.id">{{ owner.name }}</option> }</select></label>
+      <div class="form-row"><label>Preço (R$)<input formControlName="price" inputmode="decimal" placeholder="12,50"></label><label>Estoque disponível<input formControlName="stock" inputmode="numeric" placeholder="A contar"></label></div>
+      <label class="checkbox-label"><input type="checkbox" formControlName="active">Produto ativo</label>
+      <p class="muted">Alterações de preço e participante valem para novos pedidos. Vendas registradas guardam os dados originais.</p>
+      <button type="submit" class="primary" [disabled]="store.busy()">Salvar produto</button>
+    </form>
+    <details class="spaced"><summary>Cadastrar participante</summary><form (ngSubmit)="addOwner()"><label>Nome da participante<input name="ownerName" [(ngModel)]="ownerName" maxlength="100"></label><button type="submit" class="secondary" [disabled]="store.busy() || !ownerName.trim()">Cadastrar participante</button></form></details>
+  </section>
+</div>

@@ -1,0 +1,18 @@
+<section class="panel">
+  <div class="section-heading"><h2>Histórico de pedidos</h2><div class="button-row"><a class="secondary" href="/api/export/sales.csv" download>Exportar CSV</a><a class="secondary" href="/api/backup" download>Baixar backup</a></div></div>
+  <label class="checkbox-label"><input type="checkbox" [ngModel]="allDates()" (ngModelChange)="allDates.set($event)">Mostrar todos os dias</label>
+  <p class="muted">Exibe os pedidos e recebimentos da data selecionada, além das pendências anteriores. Receber uma pendência registra o pagamento em {{ dayLabel(store.date()) }}.</p>
+  @for (sale of sales(); track sale.id) {
+    <article class="history-order" [class.cancelled]="sale.status === 'Cancelado'">
+      <div class="section-heading"><div><strong>{{ money(sale.totalCents) }}</strong><span class="tag">{{ sale.status }}</span><span>{{ sale.paymentMethod }}</span></div><small>Pedido de {{ dayLabel(sale.date) }}{{ sale.paymentDate && sale.paymentDate !== sale.date ? ' · Recebido em ' + dayLabel(sale.paymentDate) : '' }}</small></div>
+      <ul class="order-items">@for (item of sale.items; track item.productId) { <li>{{ item.quantity }} × {{ item.name }}<span>{{ item.ownerName }} · {{ money(item.netCents) }}</span></li> }</ul>
+      @if (sale.note) { <p class="muted">{{ sale.note }}</p> }
+      @if (sale.status !== 'Cancelado') {
+        <div class="button-row">
+          @if (sale.status === 'Pendente') { <label>Forma de recebimento<select [ngModel]="receiptMethods[sale.id] || sale.paymentMethod" (ngModelChange)="receiptMethods[sale.id] = $event" [disabled]="store.busy() || !!store.data()?.day?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label><button class="primary" (click)="receive(sale)" [disabled]="store.busy() || !!store.data()?.day?.closedAt">Receber pendência</button> }
+          <button class="secondary danger-text" (click)="cancel(sale)" [disabled]="store.busy() || (sale.status === 'Pago' && paymentClosed(sale))">Cancelar pedido</button>
+        </div>
+      }
+    </article>
+  } @empty { <p class="empty">Nenhum pedido para mostrar.</p> }
+</section>

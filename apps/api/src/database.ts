@@ -1,0 +1,62 @@
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+export const schemaVersion = 2;
+
+export function openDatabase(path: string): Database.Database {
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
+  const db = new Database(path);
+  const version = db.pragma('user_version', { simple: true }) as number;
+  if (version > schemaVersion) { db.close(); throw new Error('Banco de uma versão mais nova. Não foi modificado.'); }
+  try {
+    db.pragma('foreign_keys = ON');
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = FULL');
+    if (version === 0) db.transaction(() => {
+      db.exec(`
+      CREATE TABLE owners (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+      CREATE TABLE products (
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+        owner_id INTEGER NOT NULL REFERENCES owners(id), price_cents INTEGER NOT NULL CHECK(price_cents >= 0),
+        stock INTEGER CHECK(stock IS NULL OR stock >= 0), active INTEGER NOT NULL CHECK(active IN (0,1)),
+        version INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE TABLE sales (
+        id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, date TEXT NOT NULL, payment_date TEXT,
+        payment_method TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('Pago','Pendente','Cancelado')),
+        note TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      CREATE TABLE sale_items (
+        id INTEGER PRIMARY KEY, sale_id TEXT NOT NULL REFERENCES sales(id),
+        product_id INTEGER NOT NULL REFERENCES products(id), name TEXT NOT NULL,
+        owner_id INTEGER NOT NULL REFERENCES owners(id), owner_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL CHECK(quantity > 0), price_cents INTEGER NOT NULL CHECK(price_cents >= 0),
+        discount_cents INTEGER NOT NULL CHECK(discount_cents >= 0), fee_cents INTEGER NOT NULL CHECK(fee_cents >= 0),
+        gross_cents INTEGER NOT NULL, total_cents INTEGER NOT NULL, net_cents INTEGER NOT NULL
+      );
+      CREATE TABLE days (
+        date TEXT PRIMARY KEY, opening_cents INTEGER NOT NULL, extra_cents INTEGER NOT NULL,
+        withdrawal_cents INTEGER NOT NULL, counted_cents INTEGER, note TEXT NOT NULL,
+        closed_at TEXT, snapshot TEXT
+      );
+      CREATE TABLE stock_adjustments (
+        id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL REFERENCES products(id),
+        before_stock INTEGER, after_stock INTEGER, reason TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      CREATE INDEX sales_payment_date ON sales(payment_date);
+      CREATE INDEX sale_items_sale ON sale_items(sale_id);
+      PRAGMA user_version = 2;
+      `);
+    })();
+    if (version === 1) db.transaction(() => {
+      // O primeiro protótipo v1 existiu com e sem a proteção de edição.
+      const columns = db.pragma('table_info(products)') as { name: string }[];
+      if (!columns.some(column => column.name === 'version')) {
+        db.exec('ALTER TABLE products ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
+      }
+      db.pragma(`user_version = ${schemaVersion}`);
+    })();
+    return db;
+  } catch (error) { db.close(); throw error; }
+}
