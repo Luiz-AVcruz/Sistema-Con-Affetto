@@ -9,6 +9,10 @@ export function isNonCash(method: PaymentMethod): boolean {
 export function calculateItem(product: Product, input: SaleItemInput, method: PaymentMethod): SaleItem {
   requireCondition(product.active, `Produto inativo: ${product.name}`);
   requireCondition(product.priceCents === input.expectedPriceCents, `O preço de ${product.name} mudou. Atualize o pedido.`);
+  requireCondition((input.expectedName === undefined || product.name === input.expectedName)
+    && (input.expectedOwnerId === undefined || product.ownerId === input.expectedOwnerId)
+    && (input.expectedOwnerName === undefined || product.ownerName === input.expectedOwnerName),
+    `O cadastro de ${product.name} mudou. Confira nome e participante antes de atualizar o pedido.`);
   const grossCents = product.priceCents * input.quantity;
   requireCondition(input.discountCents <= grossCents, `Desconto maior que o valor de ${product.name}.`, 400);
   const chargedCents = grossCents - input.discountCents;

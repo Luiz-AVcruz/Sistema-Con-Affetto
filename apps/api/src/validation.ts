@@ -15,7 +15,11 @@ export const saleSchema = z.object({
   status: z.enum(['Pago', 'Pendente']), note: z.string().trim().max(500),
   items: z.array(z.object({
     productId: z.number().int().positive(), quantity: z.number().int().min(1).max(10_000),
-    expectedPriceCents: money, discountCents: money, feeCents: money
+    expectedPriceCents: money,
+    expectedName: z.string().trim().min(1).max(100).optional(),
+    expectedOwnerId: z.number().int().positive().optional(),
+    expectedOwnerName: z.string().trim().min(1).max(100).optional(),
+    discountCents: money, feeCents: money
   }).strict()).min(1).max(100)
 }).strict();
 export const cashSchema = z.object({

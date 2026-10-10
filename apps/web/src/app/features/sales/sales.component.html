@@ -6,7 +6,7 @@
     </label>
     <div class="product-grid">
       @for (product of filtered(); track product.id) {
-        <button class="product-card" type="button" (click)="add(product)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || product.stock === 0" [attr.aria-label]="'Adicionar ' + product.name">
+        <button class="product-card" type="button" (click)="add(product)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || product.stock === 0" [attr.aria-label]="'Adicionar ' + product.name">
           <span class="muted">{{ product.ownerName }}</span><strong>{{ product.name }}</strong>
           <span>{{ product.description || 'Unidade' }}</span><b>{{ money(product.priceCents) }}</b>
           <span class="stock">Estoque: {{ product.stock === null ? 'A contar' : product.stock }}</span>
@@ -15,35 +15,40 @@
     </div>
   </section>
   <section class="panel cart-panel">
-    <div class="section-heading"><h2>Pedido</h2><button class="text-button" (click)="clear()" [disabled]="store.busy()">Limpar</button></div>
+    <div class="section-heading"><h2>Pedido</h2><button class="text-button" (click)="clear()" [disabled]="store.busy() || !!pendingSubmission()">Limpar</button></div>
     @if (store.data()?.fair?.closedAt) { <p class="alert">Esta feira está encerrada. O histórico e o rascunho ficam disponíveis para consulta, sem novos pedidos.</p> }
     <p class="muted">Data do pedido: {{ dayLabel(draftDate) }}</p>
-    @if (cart().length && draftDate !== store.date()) { <p class="alert">Este rascunho é de outro dia. Selecione {{ dayLabel(draftDate) }} antes de registrar.</p> }
+    @if (!pendingSubmission() && cart().length && draftDate !== store.date()) { <p class="alert">Este rascunho é de outro dia. Selecione {{ dayLabel(draftDate) }} antes de registrar.</p> }
+    @if (pendingSubmission()) {
+      <p class="alert" role="status">Este pedido aguarda confirmação. Reenvie o mesmo pedido para recuperar o resultado, sem alterar os itens. Confira o histórico antes de iniciar outra venda.</p>
+    } @else if (catalogChanged()) {
+      <div class="alert" role="status"><p>O preço, nome ou participante de um item mudou, ou o produto foi desativado. Confira o cadastro antes de registrar.</p><button type="button" (click)="updateCatalog()" [disabled]="store.busy() || !!store.data()?.fair?.closedAt">Atualizar itens do pedido</button></div>
+    }
     <form (ngSubmit)="submit()">
       @for (item of cart(); track item.product.id) {
         <div class="cart-item">
           <div><strong>{{ item.product.name }}</strong><small>{{ item.product.ownerName }} · {{ money(item.product.priceCents) }} por unidade</small></div>
           <div class="quantity-row">
-            <label>Quantidade<input type="number" min="1" max="10000" step="1" [name]="'quantity-' + item.product.id" [ngModel]="item.quantity" (ngModelChange)="update(item.product.id, 'quantity', $event)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt"></label>
-            <button type="button" class="text-button danger-text" (click)="remove(item.product.id)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt">Remover</button>
+            <label>Quantidade<input type="number" min="1" max="10000" step="1" [name]="'quantity-' + item.product.id" [ngModel]="item.quantity" (ngModelChange)="update(item.product.id, 'quantity', $event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt"></label>
+            <button type="button" class="text-button danger-text" (click)="remove(item.product.id)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">Remover</button>
           </div>
           <details><summary>Desconto e taxa deste item</summary>
             <div class="form-row">
-              <label>Desconto (R$)<input inputmode="decimal" [name]="'discount-' + item.product.id" [ngModel]="item.discount" (ngModelChange)="update(item.product.id, 'discount', $event)" [disabled]="store.busy() || nonCash() || !!store.data()?.fair?.closedAt" placeholder="0,00"></label>
-              <label>Taxa (R$)<input inputmode="decimal" [name]="'fee-' + item.product.id" [ngModel]="item.fee" (ngModelChange)="update(item.product.id, 'fee', $event)" [disabled]="store.busy() || nonCash() || !!store.data()?.fair?.closedAt" placeholder="0,00"></label>
+              <label>Desconto (R$)<input inputmode="decimal" [name]="'discount-' + item.product.id" [ngModel]="item.discount" (ngModelChange)="update(item.product.id, 'discount', $event)" [disabled]="store.busy() || !!pendingSubmission() || nonCash() || !!store.data()?.fair?.closedAt" placeholder="0,00"></label>
+              <label>Taxa (R$)<input inputmode="decimal" [name]="'fee-' + item.product.id" [ngModel]="item.fee" (ngModelChange)="update(item.product.id, 'fee', $event)" [disabled]="store.busy() || !!pendingSubmission() || nonCash() || !!store.data()?.fair?.closedAt" placeholder="0,00"></label>
             </div>
           </details>
         </div>
       } @empty { <p class="empty">Clique em um produto para montar o pedido.</p> }
       <div class="form-row">
-        <label>Pagamento<select name="payment" [ngModel]="method" (ngModelChange)="setMethod($event)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label>
-        <label>Situação<select name="status" [(ngModel)]="status" (ngModelChange)="persist()" [disabled]="store.busy() || nonCash() || !!store.data()?.fair?.closedAt"><option>Pago</option><option>Pendente</option></select></label>
+        <label>Pagamento<select name="payment" [ngModel]="method" (ngModelChange)="setMethod($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label>
+        <label>Situação<select name="status" [(ngModel)]="status" (ngModelChange)="persist()" [disabled]="store.busy() || !!pendingSubmission() || nonCash() || !!store.data()?.fair?.closedAt"><option>Pago</option><option>Pendente</option></select></label>
       </div>
-      <label>Observação<input name="note" [(ngModel)]="note" (ngModelChange)="persist()" maxlength="500" [disabled]="store.busy() || !!store.data()?.fair?.closedAt" placeholder="Opcional"></label>
+      <label>Observação<input name="note" [(ngModel)]="note" (ngModelChange)="persist()" maxlength="500" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt" placeholder="Opcional"></label>
       @if (nonCash()) { <p class="muted">Baixa o estoque e registra a saída sem cobrança.</p> }
       @if (status === 'Pendente') { <p class="muted">O estoque será baixado quando o pagamento for recebido.</p> }
       <div class="cart-total"><span>{{ status === 'Pendente' ? 'A receber' : 'Total do pedido' }}</span><strong data-testid="cart-total">{{ quote() === null ? 'Confira os ajustes' : money(quote()!) }}</strong></div>
-      <button type="submit" class="primary full-width" [disabled]="!cart().length || quote() === null || store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || draftDate !== store.date()">{{ store.saving() ? 'Registrando...' : 'Registrar pedido' }}</button>
+      <button type="submit" class="primary full-width" [disabled]="store.busy() || (!pendingSubmission() && (!cart().length || quote() === null || catalogChanged() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || draftDate !== store.date()))">{{ store.saving() ? 'Registrando...' : 'Registrar pedido' }}</button>
     </form>
   </section>
 </div>

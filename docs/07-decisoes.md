@@ -14,6 +14,7 @@
 | Versão otimista no cadastro | Impedir que formulário antigo restaure estoque já baixado por outra aba. | Ao separar operações de cadastro e contagem ou introduzir outro modelo de concorrência. |
 | CSV e backup SQLite | Consulta no Calc e recuperação completa são tarefas diferentes. | Quando houver necessidade concreta de XLSX com múltiplas abas. |
 | Migração inicial com identidade das linhas | Trazer pedidos e fechamentos, preservando o saldo já importado e os pedidos nativos. | Se for necessário conciliar alterações posteriores de duas fontes em uso. |
+| Acréscimo explícito de vendas confirmadas | Incluir linhas novas sem reimportar registros antigos nem duplicar suas saídas de estoque. | Quando a origem e o aplicativo deixarem de poder conciliar integralmente; não remover essa proteção para manter dois caixas sincronizados. |
 | Horário de registro com origem explícita | Mostrar o instante conhecido sem atribuir a vendas antigas o horário da importação. | Se a origem passar a registrar o instante real da venda. |
 | Uma feira ativa, arquivos históricos imutáveis | Separar eventos futuros, metas e fechamentos, sem perder o estoque compartilhado. | Se forem necessários dois eventos simultâneos ou retificação auditável. |
 | Porta desktop fixa | Preservar a origem do armazenamento de rascunhos e UUIDs entre aberturas. | Ao mover rascunhos para persistência independente da origem web. |
@@ -37,6 +38,20 @@ A compilação Angular inseria um evento `onload` inline para carregar o CSS; a 
 O primeiro carregamento do catálogo não trouxe os pedidos ou fechamentos do ODS. A migração acrescentou vínculos estáveis por posição física da linha, snapshots de preço/participante e conferência dos resumos antes de confirmar a transação. O hash do arquivo completo identifica a evidência lida; ele não cria uma nova identidade de venda a cada salvamento. O hash da linha original permanece separado do estado atual do pedido, permitindo repetir a importação depois de receber ou cancelar sem desfazer essas ações.
 
 O cancelamento no histórico permanece sujeito à confirmação e ao bloqueio de pagamentos de dias fechados. A ação aparece no rodapé do pedido, com botão contornado e separação visual do recebimento de pendências. Em tela estreita, as ações se acomodam em linhas distintas.
+
+## Revisão geral de 10/10/2026
+
+Uma revisão independente com `reviewer_astra` reproduziu três defeitos de operação, além da conferência financeira já realizada. As correções foram limitadas aos caminhos afetados:
+
+- A reinstalação sem repetir `CAIXA_DB` perdia a seleção do banco. A configuração agora permanece fora da instalação substituída; o launcher e os recursos são preparados antes da troca. Testes com filesystem real verificam atualização, migração do atalho antigo e recuperação diante de falha.
+- Trocar pagamento monetário com ajustes para permuta/brinde deixava desconto e taxa desabilitados no formulário, mas ainda enviados. A transição zera esses campos, mantendo a recusa correspondente no servidor.
+- O carrinho restaurava o produto antigo após edição de nome, preço ou participante. A interface detecta a diferença e exige atualização explícita; o backend verifica as expectativas de nome e participante dos novos clientes antes de criar a venda. Estoque/versionamento não fazem parte dessas expectativas, evitando conflitos sem mudança nos dados apresentados.
+
+Um corpo enviado sem confirmação fica persistido e congelado antes do POST. Somente uma resposta confirmada ou uma recusa HTTP 4xx conhecida libera essa recuperação. Falha de rede, 5xx ou leitura da resposta conserva o corpo; falha ao persistir impede novo envio. Um POST confirmado seguido de falha ao atualizar a tela continua sendo sucesso. Rascunhos anteriores mantêm o formato do payload antigo, sem campos novos que alterariam seu hash.
+
+A recuperação reutiliza o corpo e a chave originais mesmo após mudança do catálogo, da data selecionada ou fechamento do dia/feira. A API resolve o retry por ID/hash antes de validar o estado atual; pedidos ainda inexistentes continuam sujeitos aos bloqueios. Testes de navegador gravam de fato no SQLite e só então abortam a resposta, desafiando a duplicação e as baixas de estoque.
+
+As melhorias opcionais identificadas foram agrupar itens por pedido em uma passagem e acrescentar um atalho “Hoje”/aviso de data. Não houve lentidão observada no volume atual, e a data selecionável é necessária para consulta. Esses pontos ficaram para uma necessidade concreta; não houve mudança de arquitetura, dependências ou otimização ampla.
 
 ## Antes da troca definitiva
 

@@ -12,6 +12,7 @@ export interface ProductInput {
 }
 export interface SaleItemInput {
   productId: number; quantity: number; expectedPriceCents: number;
+  expectedName?: string; expectedOwnerId?: number; expectedOwnerName?: string;
   discountCents: number; feeCents: number;
 }
 export interface SaleInput {

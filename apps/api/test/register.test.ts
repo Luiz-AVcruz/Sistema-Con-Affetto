@@ -55,6 +55,46 @@ test('reenvio após perda de resposta não duplica venda nem estoque; mudar o co
     assert.throws(() => register.createSale({ ...input, note: 'outro pedido' }), /outros valores/);
   } finally { db.close(); }
 });
+
+test('metadados esperados recusam cadastro alterado antes de gravar venda ou baixar estoque', () => {
+  for (const change of ['name', 'owner'] as const) {
+    const { db, register, a } = fixture();
+    try {
+      const input = order([a]); input.items[0] = { ...input.items[0], expectedName: a.name, expectedOwnerId: a.ownerId, expectedOwnerName: a.ownerName };
+      register.saveProduct({ ...a, name: change === 'name' ? 'Outro nome' : a.name, ownerId: change === 'owner' ? 2 : a.ownerId, expectedVersion: a.version }, a.id);
+      const products = register.products();
+      assert.throws(() => register.createSale(saleSchema.parse(input)), /cadastro.*mudou/);
+      assert.deepEqual(register.products(), products); assert.equal(register.sales().length, 0);
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sale_items').get()?.['n'], 0);
+    } finally { db.close(); }
+  }
+});
+
+test('reenvio com metadados recupera venda gravada antes de conferir cadastro, preço ou atividade atuais', () => {
+  const { db, register, a } = fixture();
+  try {
+    const input = order([a]); input.items[0] = { ...input.items[0], expectedName: a.name, expectedOwnerId: a.ownerId, expectedOwnerName: a.ownerName };
+    const payload = saleSchema.parse(input), saved = register.createSale(payload);
+    const current = register.products()[0];
+    register.saveProduct({ ...current, name: 'Novo nome', ownerId: 2, priceCents: 1800, active: false, expectedVersion: current.version }, current.id);
+    const products = register.products();
+    assert.deepEqual(register.createSale(saleSchema.parse(input)), saved);
+    assert.deepEqual(register.products(), products); assert.equal(register.sales().length, 1);
+  } finally { db.close(); }
+});
+
+test('campos opcionais ausentes mantêm hash e recuperação de pedido de cliente anterior', () => {
+  const { db, register, a } = fixture();
+  try {
+    const oldInput = order([a]), saved = register.createSale(oldInput);
+    const parsed = saleSchema.parse(oldInput);
+    assert.deepEqual(parsed, oldInput);
+    assert.equal(Object.hasOwn(parsed.items[0], 'expectedOwnerId'), false);
+    const current = register.products()[0];
+    register.saveProduct({ ...current, ownerId: 2, priceCents: 1800, expectedVersion: current.version }, current.id);
+    assert.deepEqual(register.createSale(parsed), saved); assert.equal(register.sales().length, 1);
+  } finally { db.close(); }
+});
 test('falta de estoque no segundo item desfaz integralmente o pedido e a primeira baixa', () => {
   const { db, register, a, b } = fixture();
   try {

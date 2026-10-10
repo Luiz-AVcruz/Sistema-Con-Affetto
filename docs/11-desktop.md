@@ -6,7 +6,7 @@ O caixa usa Tauri para abrir uma janela própria no Linux. Angular continua resp
 
 Abra **Caixa da Feira** pelo menu de aplicativos. A janela inicia maximizada para manter os produtos e o pedido lado a lado no notebook. Uma segunda abertura traz a janela existente para frente, sem iniciar outro backend. Ao fechar a última janela, o programa conclui as exportações já aceitas, solicita o encerramento do processo Node e aguarda sua conclusão, fechando o SQLite. Se o processo principal for interrompido abruptamente, o kernel sinaliza o Node filho para que ele também encerre.
 
-A versão instalada neste notebook usa o banco do projeto em `~/Projetos/caixa-da-feira/data/caixa.sqlite`. Instalar ou recompilar o aplicativo não substitui esse banco. O atalho define `CAIXA_DB`; para testar outro banco, use um caminho separado.
+A versão instalada neste notebook usa o banco do projeto em `~/Projetos/caixa-da-feira/data/caixa.sqlite`. Instalar ou recompilar o aplicativo não substitui esse banco. O atalho define `CAIXA_DB`; para testar outro banco, use um caminho separado. O instalador conserva a seleção em `~/.config/caixa-da-feira/database.json`, fora da pasta substituída. Uma reinstalação sem repetir a variável mantém o banco configurado. Na primeira atualização de uma instalação antiga, recupera o literal do atalho conhecido sem executá-lo; uma configuração ambígua é recusada. Informar `CAIXA_DB` explicitamente escolhe outro caminho. Encerre o aplicativo antes de atualizar a instalação.
 
 O backend atende somente `127.0.0.1`. A porta normal do desktop é `3335`, mantendo a origem do armazenamento de carrinhos entre aberturas. A janela só abre depois da confirmação de escuta do processo que o aplicativo iniciou. Se a porta estiver ocupada por outro serviço, o programa informa a falha; não adota esse serviço nem muda de porta silenciosamente.
 
@@ -33,6 +33,8 @@ O modo web de manutenção continua disponível com `npm start` na porta 3333. E
 ## Verificação
 
 Testes de API, estoque e migração usam bancos temporários. O teste de navegador verifica as telas, mas não prova por si só o comportamento do Tauri. Nunca cadastrar vendas de teste no banco de uso.
+
+As regressões do instalador também usam contas e builds fictícios em diretórios temporários. Executam o launcher resultante para conferir o caminho literal do banco, repetem a instalação sem variável e verificam preservação da instalação/configuração diante de build incompleto ou falha de escrita.
 
 O teste de backend empacotado verifica o listener pertencente ao processo iniciado, conflito de porta e encerramento por SIGTERM:
 

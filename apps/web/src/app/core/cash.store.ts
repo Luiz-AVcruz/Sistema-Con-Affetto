@@ -54,7 +54,7 @@ export class CashStore {
     } else this.error.set(error instanceof Error ? error.message : 'Não foi possível concluir a operação.');
   }
 
-  private async mutate(operation: () => Promise<unknown>, message: string): Promise<boolean> {
+  private async mutate(operation: () => Promise<unknown>, message: string, failed?: (error: unknown) => void): Promise<boolean> {
     if (this.busy()) return false;
     this.saving.set(true); this.error.set(''); this.notice.set('');
     try {
@@ -64,6 +64,7 @@ export class CashStore {
       await this.refresh();
       return true;
     } catch (error) {
+      failed?.(error);
       this.report(error);
       if (error instanceof HttpErrorResponse && error.status === 409) await this.refresh();
       return false;
@@ -71,10 +72,15 @@ export class CashStore {
     finally { this.saving.set(false); }
   }
 
-  saveSale(input: SaleInput) {
+  async saveSale(input: SaleInput, recover = false): Promise<'saved' | 'rejected' | 'uncertain' | 'busy'> {
+    if (this.busy()) return 'busy';
     const fairId = this.data()?.fair.id;
-    if (fairId === undefined || this.data()?.fair.closedAt) { this.error.set('Selecione uma feira ativa para registrar pedidos.'); return Promise.resolve(false); }
-    return this.mutate(() => firstValueFrom(this.http.post('/api/sales', { ...input, fairId })), 'Pedido registrado.');
+    if (fairId === undefined || input.fairId !== undefined && input.fairId !== fairId || this.data()?.fair.closedAt && !recover) { this.error.set('Selecione a feira deste pedido para registrar ou recuperar sua confirmação.'); return 'rejected'; }
+    let outcome: 'rejected' | 'uncertain' = 'uncertain';
+    const saved = await this.mutate(() => firstValueFrom(this.http.post('/api/sales', { ...input, fairId })), 'Pedido registrado.', error => {
+      if (error instanceof HttpErrorResponse && error.status >= 400 && error.status < 500) outcome = 'rejected';
+    });
+    return saved ? 'saved' : outcome;
   }
   saveProduct(input: ProductInput, id?: number) {
     return this.mutate(() => firstValueFrom(id ? this.http.put(`/api/products/${id}`, input) : this.http.post('/api/products', input)), 'Produto salvo.');
