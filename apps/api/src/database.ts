@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const schemaVersion = 2;
+export const schemaVersion = 3;
 
 export function openDatabase(path: string): Database.Database {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -55,7 +55,15 @@ export function openDatabase(path: string): Database.Database {
       if (!columns.some(column => column.name === 'version')) {
         db.exec('ALTER TABLE products ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
       }
-      db.pragma(`user_version = ${schemaVersion}`);
+      db.pragma('user_version = 2');
+    })();
+    if (version < 3) db.transaction(() => {
+      db.exec(`CREATE TABLE spreadsheet_records (
+        source_key TEXT NOT NULL, record_key TEXT NOT NULL, payload_hash TEXT NOT NULL,
+        sale_id TEXT REFERENCES sales(id), day_date TEXT UNIQUE REFERENCES days(date),
+        source_sha256 TEXT NOT NULL, imported_at TEXT NOT NULL, PRIMARY KEY(source_key, record_key),
+        CHECK((sale_id IS NULL) <> (day_date IS NULL))
+      ); PRAGMA user_version = 3;`);
     })();
     return db;
   } catch (error) { db.close(); throw error; }

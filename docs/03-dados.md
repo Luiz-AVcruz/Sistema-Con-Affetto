@@ -10,6 +10,7 @@
 | `sale_items` | Quantidades, valores e dados históricos de cada item. |
 | `days` | Conferência de dinheiro e snapshot do fechamento. |
 | `stock_adjustments` | Contagens manuais que alteraram um estoque já cadastrado. |
+| `spreadsheet_records` | Identidade e hash originais de linhas/fechamentos importados, vínculo com o pedido ou dia e evidência do snapshot ODS. |
 
 Os itens guardam nome, participante e preço praticado. Eles continuam relacionados ao produto para controlar estoque, mas um relatório financeiro não consulta o preço atual para recalcular uma venda anterior.
 
@@ -42,6 +43,8 @@ Pix e cartões não são dinheiro físico na gaveta. As taxas reduzem a parte l�
 
 As consultas mantêm uma distinção entre data do pedido e data do recebimento. O fechamento é um snapshot. O total da feira é calculado a partir do estado dos pedidos, preservando cada item histórico.
 
+`created_at` é um instante UTC de gravação no banco. Para pedidos do aplicativo, corresponde ao registro e é mostrado no fuso `America/Sao_Paulo`, com segundos. Para pedidos importados, é o instante da importação. A origem `Planilha`, obtida pelo vínculo em `spreadsheet_records`, impede apresentar esse instante como horário da venda antiga. A data de negócio continua sendo a data informada no pedido, mesmo quando ela difere do dia em que ele foi digitado.
+
 ## Atomicidade
 
 Imagine um pedido com dois produtos. O primeiro tem estoque; o segundo não tem. Se o código gravar o primeiro item e falhar no segundo, deixa um pedido parcial e um estoque incorreto.
@@ -64,14 +67,16 @@ SQLite usa WAL e `synchronous=FULL`. O WAL pode guardar alterações confirmadas
 
 O endpoint de backup serializa o conteúdo do banco aberto. O teste grava esses bytes em um arquivo, abre esse arquivo em outro SQLite e verifica integridade, valores e fechamento. O cabeçalho de modo WAL não é aceito pela desserialização direta em memória da dependência; abrir a cópia por arquivo corresponde ao uso real do backup. Isso comprova o snapshot lógico e sua legibilidade; não equivale a garantir sobrevivência de qualquer falha de disco ou energia.
 
-O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Se a origem for v1, migra apenas a cópia. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis.
+O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Aceita v1, v2 e v3 e migra apenas a cópia quando necessário. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis.
 
 O destino precisa estar livre também de `-wal`, `-shm` e `-journal`. Um WAL residual de outro banco pode ser reaplicado ao abrir o arquivo restaurado, produzindo registros diferentes mesmo com `integrity_check` igual a `ok`. O programa recusa esse caminho e preserva os auxiliares. O teste reproduz a presença de um WAL real sem o arquivo principal.
 
 ## Evolução do esquema
 
-`PRAGMA user_version` identifica o schema. A versão 0 recebe as tabelas iniciais e passa para 2. A versão 1 foi usada no primeiro protótipo; a versão 2 acrescenta a proteção de edição por `products.version`. Ao abrir v1, uma transação adiciona a coluna com valor inicial 1 se ela estiver ausente e atualiza a versão do esquema. Se a coluna já existir, seus valores são preservados. Reabrir v2 não repete a alteração.
+`PRAGMA user_version` identifica o schema. A versão 1 foi usada no primeiro protótipo; a versão 2 acrescenta a proteção de edição por `products.version`; a versão 3 acrescenta `spreadsheet_records`. Um banco novo recebe as tabelas atuais. Ao abrir v1, uma transação adiciona a coluna de versão com valor inicial 1 se estiver ausente; os valores existentes são preservados. Depois, v1 ou v2 recebem os vínculos de importação em outra transação, sem atualizar as seis tabelas anteriores. Reabrir v3 não repete essas alterações.
 
-Os testes partem de um banco v1 com vendas, estoque e fechamento. Comparam os registros das seis tabelas antes e depois, conferem integridade e reabertura. Um banco de versão mais nova é recusado antes de mudar seu modo de journal.
+Os testes partem de bancos v1 e v2 com vendas, estoque e fechamento. Comparam os registros das seis tabelas anteriores, conferem que a nova tabela começa vazia, integridade e reabertura. A restauração de um backup v3 também preserva os vínculos de origem. Um banco de versão mais nova é recusado antes de mudar seu modo de journal.
+
+A migração de histórico ocorre em uma transação `IMMEDIATE`, após a validação do JSON. Ela insere os snapshots originais e os vínculos, sem chamar o caminho normal de venda que consome estoque. Resumos divergentes provocam rollback dos pedidos, itens, participantes adicionais, fechamentos e vínculos. A identidade da linha e o hash original continuam iguais mesmo se o estado do pedido mudar depois no aplicativo. Veja [Importação de histórico](09-importacao-historico.md).
 
 O programa anterior não deve escrever no banco migrado: ele não possui a proteção de edição. Para voltar à implementação anterior, encerre o programa e use uma cópia do backup anterior à migração, preservando também o banco atual. Isso retoma o estado daquele backup; lançamentos posteriores exigem conciliação. Não existe downgrade automático ou remoção de colunas.

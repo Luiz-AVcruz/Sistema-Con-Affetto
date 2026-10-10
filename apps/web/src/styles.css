@@ -79,10 +79,18 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .history-order { border-top: 1px solid #e5e7eb; padding: 22px 0; }
 .history-order .section-heading { margin-bottom: 12px; }
 .history-order .section-heading strong { font-size: 1.2rem; margin-right: 12px; }
+.order-date { text-align: right; font-size: .87rem; color: #475569; }
+.order-time { font-variant-numeric: tabular-nums; }
+.order-actions { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
+.receipt-actions { align-items: flex-end; }
+.cancel-action { margin-left: auto; text-align: right; flex-shrink: 0; }
+.cancel-order { color: #9b2c2c; background: #fff5f5; border-color: #e8bcbc; }
+.cancel-order:not(:disabled):hover { background: #fee8e8; border-color: #c56c6c; }
+.cancel-action small { font-size: .78rem; }
 .tag { display: inline-block; background: #f1f5f9; padding: 4px 8px; border-radius: 5px; font-size: .8rem; margin-right: 12px; }
 .cancelled { color: #64748b; }
 .order-items { list-style: none; padding: 0; margin: 12px 0; }
 .order-items li { display: flex; justify-content: space-between; gap: 14px; margin: 8px 0; }
 .order-items span { color: #64748b; font-size: .88rem; }
 @media (max-width: 1000px) { .sales-layout, .two-columns { grid-template-columns: 1fr; } .product-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); } }
-@media (max-width: 600px) { main { padding: 16px 12px 30px; } .app-header { padding: 18px 14px; gap: 14px; } h1 { font-size: 1.4rem; } .panel { padding: 16px; } nav { gap: 0; } nav button { padding: 10px; } .date-field { width: 150px; } .order-items li { flex-direction: column; gap: 3px; } }
+@media (max-width: 600px) { main { padding: 16px 12px 30px; } .app-header { padding: 18px 14px; gap: 14px; } h1 { font-size: 1.4rem; } .panel { padding: 16px; } nav { gap: 0; } nav button { padding: 10px; } .date-field { width: 150px; } .order-items li { flex-direction: column; gap: 3px; } .order-date { text-align: left; } .order-actions { flex-wrap: wrap; } .receipt-actions { width: 100%; } }

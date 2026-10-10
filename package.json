@@ -11,7 +11,8 @@
     "test": "npm run build -w @caixa/shared && npm run test -w @caixa/api",
     "check": "npm test && npm run build -w @caixa/web",
     "test:e2e": "npm run build && playwright test",
-    "seed": "npm run build -w @caixa/shared && npm run seed -w @caixa/api"
+    "seed": "npm run build -w @caixa/shared && npm run seed -w @caixa/api",
+    "import:history": "npm run build -w @caixa/shared && npm run import:history -w @caixa/api"
   },
   "devDependencies": { "@playwright/test": "^1.56.0", "concurrently": "^9.2.0", "typescript": "~6.0.0" }
 }

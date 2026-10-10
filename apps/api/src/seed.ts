@@ -20,5 +20,5 @@ try {
       register.saveProduct({ ...fields, ownerId: owner.id });
     }
   })();
-  console.log(`${input.products.length} produtos importados. Vendas e fechamentos da planilha não foram importados.`);
+  console.log(`${input.products.length} produtos importados. Para trazer pedidos e fechamentos, execute npm run import:history na raiz do projeto.`);
 } finally { db.close(); }

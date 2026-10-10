@@ -48,12 +48,13 @@ export function createApp(register: CashRegister, frontend?: string) {
   app.put('/api/days/:date', (req, res) => res.json(register.saveDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.post('/api/days/:date/close', (req, res) => res.json(register.closeDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.get('/api/export/sales.csv', (_req, res) => {
-    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação'];
+    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação', 'Registrado em (UTC)', 'Origem'];
     const reais = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
     const rows = register.sales().flatMap(sale => sale.items.map(item => [sale.id, sale.date, sale.paymentDate ?? '', sale.status,
       sale.paymentMethod, item.name, item.ownerName, item.quantity, reais(item.priceCents), reais(item.discountCents),
       reais(item.feeCents), reais(item.totalCents), reais(item.netCents),
-      reais(sale.status === 'Pago' ? item.totalCents : 0), reais(sale.status === 'Pago' ? item.netCents : 0), sale.note]));
+      reais(sale.status === 'Pago' ? item.totalCents : 0), reais(sale.status === 'Pago' ? item.netCents : 0), sale.note,
+      sale.origin === 'Aplicativo' ? sale.createdAt : '', sale.origin]));
     res.setHeader('Content-Disposition', 'attachment; filename="vendas-feira.csv"');
     res.type('text/csv; charset=utf-8').send('\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n'));
   });

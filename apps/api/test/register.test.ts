@@ -182,7 +182,7 @@ test('recebimento anterior à origem do pedido é recusado sem alteração finan
     assert.equal(register.summary().receivedCents, 0);
   } finally { db.close(); }
 });
-for (const legacyColumn of [false, true]) test(`migração v1 preserva registros e fechamento (${legacyColumn ? 'com' : 'sem'} coluna de versão)`, () => {
+for (const [oldVersion, legacyColumn] of [[1, false], [1, true], [2, true]] as const) test(`migração v${oldVersion} preserva registros e fechamento (${legacyColumn ? 'com' : 'sem'} coluna de versão)`, () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-migracao-')), path = join(folder, 'legacy.sqlite');
   let db: Database.Database | undefined;
   try {
@@ -192,11 +192,13 @@ for (const legacyColumn of [false, true]) test(`migração v1 preserva registros
     data.register.saveProduct({ ...product, stock: 8, expectedVersion: product.version }, product.id);
     data.register.closeDay('2026-10-10', emptyCash);
     if (!legacyColumn) db.exec('ALTER TABLE products DROP COLUMN version');
-    db.pragma('user_version = 1');
+    db.exec('DROP TABLE spreadsheet_records');
+    db.pragma(`user_version = ${oldVersion}`);
     const tables = ['owners','products','sales','sale_items','days','stock_adjustments'];
     const before = tables.map(table => db!.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
     db.close(); db = openDatabase(path);
-    assert.equal(db.pragma('user_version', { simple: true }), 2);
+    assert.equal(db.pragma('user_version', { simple: true }), 3);
+    assert.deepEqual(db.prepare('SELECT * FROM spreadsheet_records').all(), []);
     const actual = tables.map(table => db!.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
     if (!legacyColumn) actual[1] = actual[1].map(row => {
       const { version, ...saved } = row as Record<string, unknown>;
@@ -214,7 +216,7 @@ for (const legacyColumn of [false, true]) test(`migração v1 preserva registros
 test('recusar banco de versão futura preserva o modo de journal e o arquivo', () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-versao-')), path = join(folder, 'future.sqlite');
   try {
-    const future = new Database(path); future.pragma('user_version = 3'); future.close();
+    const future = new Database(path); future.pragma('user_version = 4'); future.close();
     const before = readFileSync(path);
     assert.throws(() => openDatabase(path), /versão mais nova/);
     assert.deepEqual(readFileSync(path), before);

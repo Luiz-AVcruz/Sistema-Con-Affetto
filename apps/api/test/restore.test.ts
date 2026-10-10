@@ -15,7 +15,7 @@ const rows = (db: Database.Database) => tables.map(table => db.prepare(`SELECT *
 const hash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const restore = (source: string, target: string) => spawnSync(process.execPath, [join(projectRoot, 'scripts/restaurar-backup.mjs'), source, target], { encoding: 'utf8' });
 
-for (const legacy of [false, true]) test(`restaurador conserva backup e todos os registros (${legacy ? 'v1 anterior' : 'v2 em WAL'})`, () => {
+for (const version of [1, 2, 3]) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-'));
   let original: Database.Database | undefined, restored: Database.Database | undefined;
   try {
@@ -23,20 +23,26 @@ for (const legacy of [false, true]) test(`restaurador conserva backup e todos os
     const register = new CashRegister(original);
     original.prepare('INSERT INTO owners(id,name) VALUES(1,?)').run('Participante de teste');
     const product = register.saveProduct({ name: 'Produto de teste', description: '', ownerId: 1, priceCents: 1500, stock: 5, active: true });
-    register.createSale({ requestId: randomUUID(), date: '2026-10-10', paymentMethod: 'Pix', status: 'Pago', note: '',
+    const sale = register.createSale({ requestId: randomUUID(), date: '2026-10-10', paymentMethod: 'Pix', status: 'Pago', note: '',
       items: [{ productId: product.id, quantity: 2, expectedPriceCents: 1500, discountCents: 0, feeCents: 0 }] });
     register.closeDay('2026-10-10', { openingCents: 0, extraCents: 0, withdrawalCents: 0, countedCents: null, note: '' });
-    if (legacy) original.exec('ALTER TABLE products DROP COLUMN version; PRAGMA user_version = 1');
+    if (version === 3) original.prepare('INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,source_sha256,imported_at) VALUES(?,?,?,?,?,?)')
+      .run('caixa-da-feira-ods', 'Vendas:6', 'hash da linha original', sale.id, 'sha original', new Date().toISOString());
+    const expectedRecords = original.prepare('SELECT * FROM spreadsheet_records').all();
+    if (version < 3) original.exec('DROP TABLE spreadsheet_records');
+    if (version === 1) original.exec('ALTER TABLE products DROP COLUMN version');
+    original.pragma(`user_version = ${version}`);
     const expected = rows(original), backup = join(folder, 'backup.sqlite'), target = join(folder, 'restaurado.sqlite');
     writeFileSync(backup, original.serialize());
     const before = hash(backup), result = restore(backup, target);
     assert.equal(result.status, 0, result.stderr);
     restored = new Database(target, { readonly: true });
-    assert.equal(restored.pragma('user_version', { simple: true }), 2);
+    assert.equal(restored.pragma('user_version', { simple: true }), 3);
     assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
     const actual = rows(restored);
-    if (legacy) actual[1] = actual[1].map(({ version, ...row }) => { assert.equal(version, 1); return row; });
+    if (version === 1) actual[1] = actual[1].map(({ version, ...row }) => { assert.equal(version, 1); return row; });
     assert.deepEqual(actual, expected);
+    assert.deepEqual(restored.prepare('SELECT * FROM spreadsheet_records').all(), expectedRecords);
     const bootstrap = new CashRegister(restored).bootstrap('2026-10-10');
     assert.equal(bootstrap.day.summary.netCents, 3000);
     assert.ok(bootstrap.day.closedAt); assert.equal(bootstrap.products[0].stock, 3);
@@ -56,7 +62,7 @@ test('restaurador recusa arquivo inválido, versão futura e esquema de outro pr
   try {
     const text = join(folder, 'texto.sqlite'); writeFileSync(text, 'arquivo que não é SQLite');
     const future = join(folder, 'future.sqlite'), futureDb = new Database(future);
-    futureDb.pragma('user_version = 3'); futureDb.close();
+    futureDb.pragma('user_version = 4'); futureDb.close();
     const foreign = join(folder, 'foreign.sqlite'), foreignDb = new Database(foreign);
     foreignDb.exec('CREATE TABLE qualquer(id INTEGER); PRAGMA user_version = 2'); foreignDb.close();
     for (const [source, message] of [[text, /não é um banco SQLite/], [future, /incompatível/], [foreign, /esquema esperado/]] as const) {

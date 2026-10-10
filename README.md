@@ -8,9 +8,9 @@ O projeto também é uma referência de estudo. O desafio futuro é reconstruir 
 
 Esta versão é um protótipo para validação. Ela registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelamentos, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, total da feira, exportação CSV e backup SQLite.
 
-O catálogo pode ser extraído da última versão **salva** da planilha. As vendas e os fechamentos antigos **não são importados para o banco de uso**. A referência extraída serve para testar os cálculos em um banco temporário. Os registros feitos no programa e na planilha são independentes.
+O catálogo, os pedidos e os fechamentos podem ser extraídos da última versão **salva** da planilha. A migração inicial preserva pedidos já feitos no aplicativo e não baixa novamente o estoque das vendas antigas. O histórico abre com todos os dias visíveis. Pedidos do aplicativo mostram data e hora de registro; pedidos da planilha indicam que o horário não foi registrado na origem.
 
-Antes de usar o aplicativo como caixa principal: conferir o catálogo e a contagem atual; validar os cenários de atendimento; decidir a migração do histórico; ensaiar backup/restauração; implementar um procedimento de retificação de dias fechados se esse recurso for necessário. A primeira versão bloqueia alterações financeiras em dias fechados.
+Antes de usar o aplicativo como caixa principal: conferir o catálogo, o histórico e a contagem atual; validar os cenários de atendimento; ensaiar backup/restauração; implementar um procedimento de retificação de dias fechados se esse recurso for necessário. A primeira versão bloqueia alterações financeiras em dias fechados.
 
 ## Executar
 
@@ -47,6 +47,20 @@ npm run seed
 
 Para começar sem a planilha, cadastre participantes e produtos pela interface. Deixe o estoque vazio quando a quantidade ainda não tiver sido contada.
 
+## Histórico da planilha
+
+Depois de extrair a planilha e inicializar o catálogo, encerre o aplicativo com `Ctrl+C` e execute:
+
+```bash
+npm run import:history
+npm run build
+npm start
+```
+
+O comando cria um backup completo em `data/backups/` antes de atualizar o esquema ou importar. Ele confere os totais por participante e pagamento, os fechamentos e a compatibilidade do estoque. Se houver divergência, os registros da importação são desfeitos juntos. Não execute `seed` novamente se o catálogo já existe.
+
+A repetição da mesma origem não duplica pedidos nem desfaz recebimentos ou cancelamentos feitos no programa. Linhas novas, removidas ou alteradas no ODS depois da migração são recusadas: esse procedimento não sincroniza dois caixas em uso paralelo. O detalhe e o roteiro de conferência estão em [docs/09-importacao-historico.md](docs/09-importacao-historico.md).
+
 ## Verificar
 
 ```bash
@@ -54,7 +68,7 @@ npm run check
 npm run test:e2e
 ```
 
-`check` executa testes de regras e de HTTP com SQLite real, além da compilação de Angular e Node. Quando `data/referencia-planilha.json` existe, também compara os cálculos com os valores salvos da planilha. Os testes usam bancos isolados; não lançam vendas no banco do caixa.
+`check` executa testes de regras, importação, restauração e HTTP com SQLite real, além da compilação de Angular e Node. Quando os JSONs privados extraídos existem, também compara os cálculos e a importação com os valores salvos da planilha. Os testes usam bancos isolados; não lançam vendas no banco do caixa.
 
 `test:e2e` abre um navegador automatizado e percorre o atendimento em um banco temporário. Neste notebook usa o Brave existente. Em outro ambiente, configure `BROWSER_PATH` ou instale o Chromium do Playwright com `npx playwright install chromium`.
 
@@ -62,7 +76,7 @@ npm run test:e2e
 
 O banco de uso é `data/caixa.sqlite`. O SQLite pode criar arquivos `-wal` e `-shm` enquanto o programa está aberto. Esses arquivos fazem parte do funcionamento do banco. Não copie apenas o arquivo principal como backup de um programa em execução.
 
-Na aba **Histórico**, use **Baixar backup**. O arquivo baixado contém um snapshot completo do SQLite. O CSV é uma exportação para consulta, não substitui o backup. Ele inclui as colunas `Recebido` e `Líquido recebido`, que zeram pedidos pendentes ou cancelados.
+Na aba **Histórico**, use **Baixar backup**. O arquivo baixado contém um snapshot completo do SQLite. O CSV é uma exportação para consulta, não substitui o backup. Ele inclui as colunas `Recebido` e `Líquido recebido`, que zeram pedidos pendentes ou cancelados, e `Origem` e `Registrado em (UTC)`. O instante fica vazio nas linhas da planilha, pois o horário original é desconhecido.
 
 Para restaurar primeiro em uma cópia, com o programa encerrado:
 

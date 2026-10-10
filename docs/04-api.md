@@ -63,7 +63,9 @@ Todas as mudanças no produto, incluindo vendas e devoluções de estoque, incre
 
 O produto precisa existir e estar ativo. `expectedPriceCents` é o preço exibido quando o pedido foi montado. Se o cadastro mudou o preço, o servidor retorna conflito em vez de cobrar um valor que o operador não viu. Repetir o produto em mais de um item é recusado; agrupe sua quantidade.
 
-O retorno contém `id`, `date`, `paymentDate`, `paymentMethod`, `status`, `note`, `createdAt`, itens com seus snapshots e somas `grossCents`, `discountCents`, `feeCents`, `totalCents`, `netCents`.
+O retorno contém `id`, `date`, `paymentDate`, `paymentMethod`, `status`, `note`, `createdAt`, `origin`, itens com seus snapshots e somas `grossCents`, `discountCents`, `feeCents`, `totalCents`, `netCents`.
+
+`origin` é `Aplicativo` ou `Planilha`. Em pedidos do aplicativo, `createdAt` é o instante de registro em UTC, preservado em reenvios e reaberturas. Em pedidos da planilha, é o instante de importação, pois o ODS não registra a hora da venda. A interface mostra o horário apenas quando a origem permite conhecê-lo. O CSV acrescenta as colunas `Registrado em (UTC)` e `Origem` ao final, mantendo a ordem anterior das demais colunas; o instante original fica vazio para pedidos da planilha.
 
 O UUID deve ser criado uma vez por pedido. Um reenvio com o mesmo conteúdo mantém uma única venda. A primeira versão responde `201` tanto ao registro inicial quanto à confirmação desse reenvio. O cliente usa a identidade e os valores do pedido para reconhecer a confirmação.
 

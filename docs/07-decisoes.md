@@ -13,6 +13,8 @@
 | Snapshot de fechamento bloqueado | Proteger um dia já conferido contra alteração posterior silenciosa. | Quando houver procedimento de retificação com motivo, histórico e backup. |
 | Versão otimista no cadastro | Impedir que formulário antigo restaure estoque já baixado por outra aba. | Ao separar operações de cadastro e contagem ou introduzir outro modelo de concorrência. |
 | CSV e backup SQLite | Consulta no Calc e recuperação completa são tarefas diferentes. | Quando houver necessidade concreta de XLSX com múltiplas abas. |
+| Migração inicial com identidade das linhas | Trazer pedidos e fechamentos, preservando o saldo já importado e os pedidos nativos. | Se for necessário conciliar alterações posteriores de duas fontes em uso. |
+| Horário de registro com origem explícita | Mostrar o instante conhecido sem atribuir a vendas antigas o horário da importação. | Se a origem passar a registrar o instante real da venda. |
 
 ## Evidência obtida durante a construção
 
@@ -30,12 +32,16 @@ A revisão também reproduziu a reaplicação de um WAL antigo no destino de res
 
 A compilação Angular inseria um evento `onload` inline para carregar o CSS; a política de scripts do servidor bloqueava esse evento e deixava o CSS em modo de impressão. A otimização de CSS crítico foi desativada, mantendo a política. O teste de navegador confere o estilo carregado e erros do console.
 
+O primeiro carregamento do catálogo não trouxe os pedidos ou fechamentos do ODS. A migração acrescentou vínculos estáveis por posição física da linha, snapshots de preço/participante e conferência dos resumos antes de confirmar a transação. O hash do arquivo completo identifica a evidência lida; ele não cria uma nova identidade de venda a cada salvamento. O hash da linha original permanece separado do estado atual do pedido, permitindo repetir a importação depois de receber ou cancelar sem desfazer essas ações.
+
+O cancelamento no histórico permanece sujeito à confirmação e ao bloqueio de pagamentos de dias fechados. A ação aparece no rodapé do pedido, com botão contornado e separação visual do recebimento de pendências. Em tela estreita, as ações se acomodam em linhas distintas.
+
 ## Antes da troca definitiva
 
 - Conferir catálogo e estoque disponível na data de adoção; o snapshot importado pode envelhecer enquanto a planilha continua recebendo vendas.
 - Ensaiar atendimento, ajustes, cancelamento e fechamento com as situações reais da feira.
-- Escolher como guardar ou migrar pedidos e fechamentos antigos. A extração atual não traz esse histórico para o banco de uso.
+- Conferir os pedidos e fechamentos migrados contra o snapshot salvo e definir o momento de passar a lançar em uma única fonte.
 - Definir retificação de dia fechado, devolução/estorno parcial ou outras situações que forem necessárias na operação real.
 - Guardar um backup e provar sua recuperação em outro arquivo.
 
-Não existe migração automática ou data definida para abandonar a planilha nesta versão. O critério é a conferência do comportamento e dos dados necessários ao uso real.
+A migração de histórico é um comando explícito com backup. Não há sincronização contínua nem data definida para abandonar a planilha. O critério é a conferência do comportamento e dos dados necessários ao uso real.

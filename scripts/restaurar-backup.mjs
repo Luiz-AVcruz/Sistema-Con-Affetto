@@ -28,10 +28,11 @@ try {
   db = new Database(temporary, { readonly: true, fileMustExist: true });
   if (db.pragma('integrity_check', { simple: true }) !== 'ok') throw new Error('Backup com falha de integridade.');
   const version = db.pragma('user_version', { simple: true });
-  if (![1, schemaVersion].includes(version)) throw new Error('Versão do backup incompatível com este programa.');
+  if (![1, 2, schemaVersion].includes(version)) throw new Error('Versão do backup incompatível com este programa.');
+  if (version >= 3) requiredColumns.spreadsheet_records = ['source_key','record_key','payload_hash','sale_id','day_date','source_sha256','imported_at'];
   for (const [table, required] of Object.entries(requiredColumns)) {
     const columns = new Set(db.pragma(`table_info(${table})`).map(column => column.name));
-    if (!required.every(column => columns.has(column)) || (version === schemaVersion && table === 'products' && !columns.has('version'))) {
+    if (!required.every(column => columns.has(column)) || (version >= 2 && table === 'products' && !columns.has('version'))) {
       throw new Error(`O banco não contém o esquema esperado do caixa na tabela ${table}.`);
     }
   }

@@ -1,6 +1,6 @@
 <header class="app-header"><div><p class="eyebrow">Aplicativo local</p><h1>Caixa da feira</h1></div><label class="date-field">Data de trabalho<input type="date" [ngModel]="store.date()" (ngModelChange)="store.changeDate($event)" [disabled]="store.busy()" min="2020-01-01" max="2100-12-31"></label></header>
 <main>
-  <p class="validation-note">Versão em validação. Os pedidos registrados aqui são independentes da planilha.</p>
+  <p class="validation-note">Versão em validação. Os novos pedidos não atualizam a planilha.</p>
   <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="view.set(item)" [disabled]="store.saving()">{{ item }}</button> }</nav>
   @if (store.error()) { <div class="alert" role="alert">{{ store.error() }}<button type="button" class="text-button" (click)="store.error.set('')" aria-label="Fechar aviso">Fechar aviso</button></div> }
   @if (store.notice()) { <p class="notice" role="status">{{ store.notice() }}</p> }

@@ -24,7 +24,7 @@ export interface SaleItem extends SaleItemInput {
 }
 export interface Sale {
   id: string; date: string; paymentDate: string | null; paymentMethod: PaymentMethod;
-  status: SaleStatus; note: string; createdAt: string; items: SaleItem[];
+  status: SaleStatus; note: string; createdAt: string; origin: 'Aplicativo' | 'Planilha'; items: SaleItem[];
   grossCents: number; discountCents: number; feeCents: number;
   totalCents: number; netCents: number;
 }

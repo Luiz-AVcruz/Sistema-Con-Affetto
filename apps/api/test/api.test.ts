@@ -40,6 +40,9 @@ test('contrato HTTP: pedido misto, reenvio concorrente, valores inválidos, CSV 
   const results = await Promise.all([api('/api/sales', input), api('/api/sales', input)]);
   assert.deepEqual(results.map(result => result.status), [201,201]);
   const sale = await results[0].json(); assert.equal(sale.totalCents, 5500);
+  assert.equal(sale.origin, 'Aplicativo');
+  assert.match(sale.createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal((await results[1].json()).createdAt, sale.createdAt);
   let data = await (await api('/api/bootstrap?date=2026-10-10')).json();
   assert.equal(data.sales.filter((row: { id: string }) => row.id === input.requestId).length, 1);
   assert.equal(data.products.find((product: { id: number }) => product.id === productA.id).stock, 9);
@@ -54,6 +57,7 @@ test('contrato HTTP: pedido misto, reenvio concorrente, valores inválidos, CSV 
   assert.equal(data.products.find((product: { id: number }) => product.id === productA.id).stock, 9);
   const csv = await (await api('/api/export/sales.csv')).text();
   assert.ok(csv.includes('"\'=1+1"')); assert.ok(csv.includes('"15,00"')); assert.ok(csv.includes('"Líquido recebido"'));
+  assert.ok(csv.includes('"Registrado em (UTC)"')); assert.ok(csv.includes(`"${sale.createdAt}";"Aplicativo"`));
   const backup = Buffer.from(await (await api('/api/backup')).arrayBuffer());
   assert.equal(backup.subarray(0,16).toString(), 'SQLite format 3\0');
   const folder = mkdtempSync(join(tmpdir(), 'caixa-download-')), path = join(folder, 'backup.sqlite');

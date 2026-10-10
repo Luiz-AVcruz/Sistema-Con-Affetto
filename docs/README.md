@@ -11,6 +11,7 @@ Leia nesta ordem:
 5. [Roteiro de estudo e exercícios](05-estudo.md): como trabalhar no projeto sem delegar a implementação inteira.
 6. [Reconstrução do backend em Rust](06-desafio-rust.md): critérios de equivalência e sequência do desafio.
 7. [Versionamento local](08-git.md): como conferir, selecionar e registrar mudanças sem incluir os dados do caixa.
+8. [Importação de histórico](09-importacao-historico.md): como migrar pedidos e fechamentos sem duplicar estoque ou inventar horários.
 
 Depois de mudar um comportamento, atualize a regra correspondente e o teste que a demonstra. Registre decisões específicas em [Decisões e pendências](07-decisoes.md), com o motivo e a condição que justificaria revisá-las.
 

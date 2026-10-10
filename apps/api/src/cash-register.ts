@@ -4,7 +4,7 @@ import type { Owner, Product, ProductInput, SaleInput, Sale, SaleItem, Summary, 
 import { calculateItem, isNonCash, summarize } from './finance.js';
 import { requireCondition } from './validation.js';
 
-type SaleRow = { id: string; request_hash: string; date: string; payment_date: string | null; payment_method: PaymentMethod; status: Sale['status']; note: string; created_at: string };
+type SaleRow = { id: string; request_hash: string; date: string; payment_date: string | null; payment_method: PaymentMethod; status: Sale['status']; note: string; created_at: string; origin: Sale['origin'] };
 type DayRow = { date: string; opening_cents: number; extra_cents: number; withdrawal_cents: number; counted_cents: number | null; note: string; closed_at: string | null; snapshot: string | null };
 
 export class CashRegister {
@@ -39,7 +39,9 @@ export class CashRegister {
   }
 
   sales(): Sale[] {
-    const rows = this.db.prepare('SELECT * FROM sales ORDER BY created_at DESC, rowid DESC').all() as SaleRow[];
+    const rows = this.db.prepare(`SELECT s.*, CASE WHEN EXISTS(SELECT 1 FROM spreadsheet_records r WHERE r.sale_id=s.id)
+      THEN 'Planilha' ELSE 'Aplicativo' END AS origin FROM sales s
+      ORDER BY s.date DESC, origin ASC, s.created_at DESC, s.rowid DESC`).all() as SaleRow[];
     const allItems = this.db.prepare(`SELECT sale_id AS saleId, product_id AS productId, quantity, name,
       owner_id AS ownerId, owner_name AS ownerName, price_cents AS priceCents, price_cents AS expectedPriceCents,
       discount_cents AS discountCents, fee_cents AS feeCents, gross_cents AS grossCents,
@@ -48,7 +50,7 @@ export class CashRegister {
       const items = allItems.filter(item => item.saleId === row.id).map(({ saleId, ...item }) => item);
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
       return { id: row.id, date: row.date, paymentDate: row.payment_date, paymentMethod: row.payment_method,
-        status: row.status, note: row.note, createdAt: row.created_at, items,
+        status: row.status, note: row.note, createdAt: row.created_at, origin: row.origin, items,
         grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents') };
     });
   }

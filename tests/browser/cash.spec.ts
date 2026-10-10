@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('operador registra pedido misto, permuta, pendência, cancelamento e fecha sem contagem', async ({ page, request }) => {
+test('histórico importado, horário e fluxo de venda, recebimento, cancelamento e fechamento', async ({ page, request }, testInfo) => {
   const ownerA = await (await request.post('/api/owners', { data: { name: 'Participante A' } })).json();
   const ownerB = await (await request.post('/api/owners', { data: { name: 'Participante B' } })).json();
   for (const product of [{ name: 'Pipoca', ownerId: ownerA.id, priceCents: 1500, stock: 10 }, { name: 'Caneca', ownerId: ownerB.id, priceCents: 4000, stock: 3 }]) {
@@ -11,7 +11,8 @@ test('operador registra pedido misto, permuta, pendência, cancelamento e fecha 
   const submit = async () => {
     const response = page.waitForResponse(response => response.url().endsWith('/api/sales') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Registrar pedido', exact: true }).click();
-    expect((await response).ok()).toBeTruthy();
+    const savedResponse = await response;
+    expect(savedResponse.ok()).toBeTruthy();
     await expect(page.getByTestId('cart-total')).toContainText('0,00');
     await expect(page.getByRole('combobox', { name: 'Pagamento', exact: true })).toHaveValue('Dinheiro');
   };
@@ -24,6 +25,10 @@ test('operador registra pedido misto, permuta, pendência, cancelamento e fecha 
   await page.reload();
   await expect(page.getByTestId('cart-total')).toContainText('55,00');
   await submit();
+  const selectedDate = await page.locator('.date-field input').inputValue();
+  const bootstrap = await request.get('/api/bootstrap?date=' + selectedDate);
+  expect(bootstrap.ok()).toBeTruthy();
+  const mixedSale = (await bootstrap.json()).sales.find((sale: { items: { name: string }[] }) => sale.items.some(item => item.name === 'Caneca'));
   await expect(page.getByRole('status').filter({ hasText: 'Pedido registrado' })).toBeVisible();
   await page.getByRole('button', { name: 'Adicionar Pipoca', exact: true }).click();
   await page.getByRole('combobox', { name: 'Pagamento', exact: true }).selectOption('Permuta');
@@ -32,6 +37,22 @@ test('operador registra pedido misto, permuta, pendência, cancelamento e fecha 
   await page.getByRole('combobox', { name: 'Situação', exact: true }).selectOption('Pendente');
   await submit();
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Mostrar todos os dias' })).toBeChecked();
+  const historical = page.locator('.history-order').filter({ hasText: 'Pedido histórico de teste' });
+  await expect(historical).toContainText('08/10/2026');
+  await expect(historical).toContainText('Horário não registrado na planilha');
+  await expect(historical.getByRole('button', { name: 'Cancelar pedido', exact: true })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Mostrar todos os dias' }).uncheck();
+  await expect(historical).toHaveCount(0);
+  await page.getByRole('checkbox', { name: 'Mostrar todos os dias' }).check();
+  const registered = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(mixedSale.createdAt));
+  await expect(page.locator('.history-order').filter({ hasText: 'Caneca' }).locator('.order-time')).toHaveText('Registrado em ' + registered);
+  await page.screenshot({ path: testInfo.outputPath('historico-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.screenshot({ path: testInfo.outputPath('historico-estreito.png'), fullPage: true });
+  await page.setViewportSize({ width: 1366, height: 900 });
   const pending = page.locator('.history-order').filter({ hasText: 'Pendente' });
   await pending.getByRole('button', { name: 'Receber pendência', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Pagamento recebido' })).toBeVisible();
@@ -41,7 +62,7 @@ test('operador registra pedido misto, permuta, pendência, cancelamento e fecha 
   await expect(barter).toContainText('Cancelado');
   await page.getByRole('button', { name: 'Fechamento', exact: true }).click();
   await expect(page.getByTestId('day-net')).toContainText('70,00');
-  await expect(page.getByTestId('fair-net')).toContainText('70,00');
+  await expect(page.getByTestId('fair-net')).toContainText('95,00');
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Fechar dia', exact: true }).click();
   await expect(page.locator('.status-line')).toHaveText('Fechado sem contagem');
@@ -49,5 +70,7 @@ test('operador registra pedido misto, permuta, pendência, cancelamento e fecha 
   await expect(page.getByRole('button', { name: 'Adicionar Pipoca', exact: true })).toBeDisabled();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Adicionar Pipoca', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await expect(page.locator('.history-order').filter({ hasText: 'Caneca' }).locator('.order-time')).toHaveText('Registrado em ' + registered);
   expect(errors).toEqual([]);
 });
