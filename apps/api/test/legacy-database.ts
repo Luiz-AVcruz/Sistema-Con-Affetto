@@ -6,7 +6,8 @@ export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVe
   db.pragma('foreign_keys = OFF');
   try {
     db.transaction(() => {
-      db.exec(`DROP TABLE spreadsheet_records;
+      db.exec(`ALTER TABLE sales DROP COLUMN deleted_at;
+        DROP TABLE spreadsheet_records;
         CREATE TABLE days_old(date TEXT PRIMARY KEY,opening_cents INTEGER NOT NULL,extra_cents INTEGER NOT NULL,
           withdrawal_cents INTEGER NOT NULL,counted_cents INTEGER,note TEXT NOT NULL,closed_at TEXT,snapshot TEXT);
         INSERT INTO days_old SELECT date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note,closed_at,snapshot FROM days;
@@ -26,7 +27,14 @@ export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVe
 }
 
 export function withoutFairId(rows: Record<string, unknown>[]) {
-  return rows.map(({ fair_id, ...row }) => { if (fair_id !== undefined) {
+  return withoutDeletedAt(rows).map(({ fair_id, ...row }) => { if (fair_id !== undefined) {
     if (fair_id !== 1) throw new Error('Registro antigo associado à feira incorreta.');
   } return row; });
+}
+
+export function withoutDeletedAt(rows: Record<string, unknown>[]) {
+  return rows.map(({ deleted_at, ...row }) => {
+    if (deleted_at !== undefined && deleted_at !== null) throw new Error('A migração excluiu um pedido existente.');
+    return row;
+  });
 }

@@ -103,6 +103,16 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .cancel-order { color: #9b2c2c; background: #fff5f5; border-color: #e8bcbc; }
 .cancel-order:not(:disabled):hover { background: #fee8e8; border-color: #c56c6c; }
 .cancel-action small { font-size: .78rem; }
+.delete-action { display: flex; align-items: flex-end; flex-direction: column; gap: 3px; text-align: right; }
+.delete-order { color: #475569; background: #f8fafc; border-color: #cbd5e1; padding: 8px 12px; font-size: .88rem; }
+.delete-order:not(:disabled):hover { color: #7f1d1d; background: #fff7f7; border-color: #d6a2a2; }
+.delete-action small { max-width: 210px; font-size: .75rem; }
+.delete-confirmation { margin-top: 14px; padding: 15px 17px; border: 1px solid #d6a2a2; border-left: 4px solid #a94442; border-radius: 7px; background: #fffafa; line-height: 1.5; }
+.delete-confirmation h3 { margin: 0 0 9px; color: #542525; }
+.delete-confirmation p { margin-bottom: 9px; }
+.delete-confirmation .button-row { justify-content: flex-end; }
+.delete-confirm-button { color: #7f1d1d; background: #fff; border-color: #d6a2a2; }
+.delete-confirm-button:not(:disabled):hover { background: #fceeee; border-color: #ad6868; }
 .tag { display: inline-block; background: #f1f5f9; padding: 4px 8px; border-radius: 5px; font-size: .8rem; margin-right: 12px; }
 .cancelled { color: #64748b; }
 .order-items { list-style: none; padding: 0; margin: 12px 0; }

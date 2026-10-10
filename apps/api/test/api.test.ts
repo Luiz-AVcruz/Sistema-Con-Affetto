@@ -2,7 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest, type Server } from 'node:http';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -79,4 +79,31 @@ test('proteção HTTP: rejeita origem externa, Host externo e envio por formulá
   assert.equal(hostStatus, 403);
   const form = await fetch(baseUrl+'/api/owners', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'name=externa' });
   assert.equal(form.status, 415);
+});
+
+test('interface instalada sob .local atende rotas da aplicação sem liberar arquivos ocultos', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'caixa-frontend-local-'));
+  const frontend = join(folder, '.local/share/caixa-da-feira/resources/frontend');
+  mkdirSync(frontend, { recursive: true });
+  const html = '<!doctype html><html><app-root>Interface temporária</app-root></html>';
+  writeFileSync(join(frontend, 'index.html'), html);
+  writeFileSync(join(frontend, 'styles.css'), 'body { margin: 0; }');
+  writeFileSync(join(frontend, '.private'), 'conteúdo interno que não pode ser servido');
+  const temporaryDb = openDatabase(':memory:');
+  const temporaryServer = createApp(new CashRegister(temporaryDb), frontend).listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => temporaryServer.once('listening', resolve));
+  const url = `http://127.0.0.1:${(temporaryServer.address() as AddressInfo).port}`;
+  try {
+    for (const path of ['/', '/historico', '/historico/pedido', '/favicon.ico']) {
+      const response = await fetch(url + path);
+      assert.equal(response.status, 200, path); assert.equal(await response.text(), html);
+    }
+    const style = await fetch(url + '/styles.css'); assert.equal(style.status, 200);
+    assert.match(style.headers.get('content-type') ?? '', /text\/css/);
+    const hidden = await fetch(url + '/.private'); assert.equal(await hidden.text(), html);
+    const missingApi = await fetch(url + '/api/inexistente'); assert.equal(missingApi.status, 404);
+  } finally {
+    await new Promise<void>(resolve => temporaryServer.close(() => resolve()));
+    temporaryDb.close(); rmSync(folder, { recursive: true, force: true });
+  }
 });

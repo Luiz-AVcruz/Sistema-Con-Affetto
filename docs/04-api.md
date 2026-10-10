@@ -1,6 +1,6 @@
 # Contrato HTTP
 
-O contexto de feira, metas, encerramento e exportações está detalhado em [Metas e feiras](10-feiras.md). A interface envia `fairId` em pedidos novos e como parâmetro nas operações de recebimento, cancelamento e fechamento. `bootstrap` devolve os dados da feira selecionada, a lista dos resumos e a identificação da feira ativa. Catálogo e estoque são compartilhados.
+O contexto de feira, metas, encerramento e exportações está detalhado em [Metas e feiras](10-feiras.md). A interface envia `fairId` em pedidos novos e como parâmetro nas operações de recebimento, cancelamento, exclusão e fechamento. `bootstrap` devolve os dados da feira selecionada, a lista dos resumos e a identificação da feira ativa. Catálogo e estoque são compartilhados.
 
 A API recebe JSON em UTF-8. Dinheiro é expresso em centavos inteiros; datas de negócio usam `YYYY-MM-DD`; instantes de gravação usam ISO 8601. Textos de pagamento e situação são exatamente os definidos em `packages/shared/src/index.ts`.
 
@@ -18,6 +18,7 @@ Uma requisição mutável exige `Content-Type: application/json`. O servidor ace
 | `POST /api/sales` | Pedido com `requestId` e itens. | Pedido confirmado, ou o pedido existente para um reenvio idêntico. |
 | `POST /api/sales/:id/receive` | Data e forma monetária de recebimento. | Pendência recebida, ou confirmação do mesmo recebimento anterior. |
 | `POST /api/sales/:id/cancel` | `{}`. | Pedido cancelado. Repetir não devolve estoque duas vezes. |
+| `DELETE /api/sales/:id?fairId=N` | `{}` com `Content-Type: application/json`. | `{ "id": "UUID", "deleted": true }`. Pedido removido das consultas; repetir não devolve estoque duas vezes. |
 | `PUT /api/days/:date` | Conferência completa. | Dia aberto com conferência salva. |
 | `POST /api/days/:date/close` | Conferência completa. | Snapshot guardado. Reenvio igual retorna o mesmo fechamento. |
 | `GET /api/export/sales.csv` | Nenhuma. | CSV por item, com ponto e vírgula e valores em reais. |
@@ -79,6 +80,10 @@ O UUID deve ser criado uma vez por pedido. Um reenvio com o mesmo conteúdo mant
 
 O destino precisa estar aberto e não pode ser anterior à data do pedido. A forma deve ser Dinheiro, Pix, Cartão débito ou Cartão crédito. Os preços e participantes originais continuam iguais; o estoque atual é conferido no momento da baixa.
 
+## Excluir um lançamento acidental
+
+`DELETE` exige um corpo JSON vazio e o contexto da feira. A primeira exclusão exige feira, dia do pedido e dia do recebimento abertos. Devolve estoque somente quando o estado atual é `Pago`, inclusive permuta/brinde; não altera novamente estoque de pendentes ou cancelados. O marcador de exclusão permanece no banco e no backup, com os hashes e vínculos importados. Os pedidos excluídos ficam fora de `bootstrap`, resumos e CSVs. Um reenvio de criação com o mesmo UUID e conteúdo retorna `410`; receber ou cancelar esse UUID retorna `404`.
+
 ## Conferir ou fechar um dia
 
 ```json
@@ -107,6 +112,7 @@ Um `Summary` contém recebido, líquido, descontos, taxas, pendentes, contagem d
 | `403` | Host ou origem não autorizados. |
 | `404` | Registro ou rota inexistentes. |
 | `409` | Conflito com estoque, cadastro, dia fechado ou comando já registrado. |
+| `410` | O pedido desse UUID foi excluído e não será recriado por reenvio. |
 | `415` | Tipo de conteúdo incorreto. |
 | `500` | Falha inesperada. O cliente deve conferir o histórico e preservar a chave antes de repetir. |
 

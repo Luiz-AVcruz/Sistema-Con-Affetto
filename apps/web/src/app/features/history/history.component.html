@@ -7,11 +7,23 @@
       <div class="section-heading"><div><strong>{{ money(sale.totalCents) }}</strong><span class="tag">{{ sale.status }}</span><span>{{ sale.paymentMethod }}</span></div><div class="order-date"><span>Pedido de {{ dayLabel(sale.date) }}{{ sale.paymentDate && sale.paymentDate !== sale.date ? ' · Recebido em ' + dayLabel(sale.paymentDate) : '' }}</span><small class="order-time">{{ sale.origin === 'Planilha' ? 'Horário não registrado na planilha' : 'Registrado em ' + registeredLabel(sale.createdAt) }}</small></div></div>
       <ul class="order-items">@for (item of sale.items; track item.productId) { <li>{{ item.quantity }} × {{ item.name }}<span>{{ item.ownerName }} · {{ money(item.netCents) }}</span></li> }</ul>
       @if (sale.note) { <p class="muted">{{ sale.note }}</p> }
-      @if (sale.status !== 'Cancelado') {
-        <div class="order-actions">
+      <div class="order-actions">
+        @if (sale.status !== 'Cancelado') {
           @if (sale.status === 'Pendente') { <div class="button-row receipt-actions"><label>Forma de recebimento<select [ngModel]="receiptMethods[sale.id] || sale.paymentMethod" (ngModelChange)="receiptMethods[sale.id] = $event" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt">@for (method of methods; track method) { <option [value]="method">{{ method }}</option> }</select></label><button class="primary" (click)="receive(sale)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt">Receber pendência</button></div> }
           <div class="cancel-action"><button type="button" class="cancel-order" (click)="cancel(sale)" [disabled]="store.busy() || !!store.data()?.fair?.closedAt || (sale.status === 'Pago' && paymentClosed(sale))">Cancelar pedido</button>@if (store.data()?.fair?.closedAt) { <small>Feira encerrada</small> } @else if (sale.status === 'Pago' && paymentClosed(sale)) { <small>Dia fechado</small> }</div>
+        }
+        <div class="delete-action">
+          @if (deleteBlockedReason(sale); as blockedReason) { <button type="button" class="delete-order" disabled>Excluir pedido</button><small>{{ blockedReason }}</small> }
+          @else { <button type="button" class="delete-order" (click)="openDeleteConfirmation(sale)" [disabled]="store.busy()" [attr.aria-expanded]="deleteConfirmation()?.sale?.id === sale.id" [attr.aria-controls]="'delete-confirmation-' + sale.id">Excluir pedido</button> }
         </div>
+      </div>
+      @if (deleteConfirmation()?.sale?.id === sale.id) {
+        <section class="delete-confirmation" role="region" aria-live="polite" [id]="'delete-confirmation-' + sale.id" [attr.aria-labelledby]="'delete-title-' + sale.id">
+          <h3 [id]="'delete-title-' + sale.id">Confirmar exclusão deste lançamento?</h3>
+          <p>Pedido de {{ dayLabel(sale.date) }}, no valor de <strong>{{ money(sale.totalCents) }}</strong>. @for (item of sale.items; track item.productId) { <span>{{ item.quantity }} × {{ item.name }}@if (!$last) {, }</span> }</p>
+          <p>Use para corrigir um lançamento acidental. O pedido sairá do histórico e dos CSVs. Se estava pago, o valor será retirado dos totais e a quantidade devolvida ao estoque. Para uma venda desfeita que deve continuar no histórico, use Cancelar pedido.</p>
+          <div class="button-row"><button type="button" class="secondary" (click)="closeDeleteConfirmation()" [disabled]="store.busy()">Voltar</button><button type="button" class="delete-confirm-button" (click)="confirmDelete()" [disabled]="store.busy() || !!deleteBlockedReason(sale)">{{ store.saving() ? 'Excluindo...' : 'Confirmar exclusão' }}</button></div>
+        </section>
       }
     </article>
   } @empty { <p class="empty">Nenhum pedido para mostrar.</p> }

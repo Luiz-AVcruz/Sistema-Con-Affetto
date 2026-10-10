@@ -6,17 +6,17 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
-import { openDatabase } from '../src/database.js';
+import { openDatabase, schemaVersion } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
 import { projectRoot } from '../src/paths.js';
-import { legacyDatabase, withoutFairId } from './legacy-database.js';
+import { legacyDatabase, withoutFairId, withoutDeletedAt } from './legacy-database.js';
 
 const tables = ['owners','products','sales','sale_items','days','stock_adjustments'];
 const rows = (db: Database.Database) => tables.map(table => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all() as Record<string, unknown>[]);
 const hash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const restore = (source: string, target: string) => spawnSync(process.execPath, [join(projectRoot, 'scripts/restaurar-backup.mjs'), source, target], { encoding: 'utf8' });
 
-for (const version of [1, 2, 3,4] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
+for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-'));
   let original: Database.Database | undefined, restored: Database.Database | undefined;
   try {
@@ -27,11 +27,16 @@ for (const version of [1, 2, 3,4] as const) test(`restaurador conserva backup e 
     const sale = register.createSale({ requestId: randomUUID(), date: '2026-10-10', paymentMethod: 'Pix', status: 'Pago', note: '',
       items: [{ productId: product.id, quantity: 2, expectedPriceCents: 1500, discountCents: 0, feeCents: 0 }] });
     register.closeDay('2026-10-10', { openingCents: 0, extraCents: 0, withdrawalCents: 0, countedCents: null, note: '' });
-    if (version === 4) {
+    if (version >= 4) {
       register.saveFair({name:'Feira encerrada com meta',targetCents:50000});
       register.closeFair('2026-10-10');
       const next=register.createFair({name:'Feira seguinte',targetCents:null,startDate:'2026-10-10'});
       const active=new CashRegister(original,next.id);
+      if (version === 5) {
+        const accidental = active.createSale({requestId:randomUUID(),date:'2026-10-10',paymentMethod:'Pix',status:'Pago',note:'Excluído antes do fechamento',
+          items:[{productId:product.id,quantity:1,expectedPriceCents:1500,discountCents:0,feeCents:0}]});
+        active.deleteSale(accidental.id);
+      }
       active.createSale({requestId:randomUUID(),date:'2026-10-10',paymentMethod:'Dinheiro',status:'Pago',note:'Segunda feira, mesmo dia',
         items:[{productId:product.id,quantity:1,expectedPriceCents:1500,discountCents:0,feeCents:0}]});
       active.closeDay('2026-10-10',{openingCents:0,extraCents:0,withdrawalCents:0,countedCents:1500,note:'Outro fechamento'});
@@ -39,16 +44,18 @@ for (const version of [1, 2, 3,4] as const) test(`restaurador conserva backup e 
     if (version >= 3) original.prepare('INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,source_sha256,imported_at,fair_id) VALUES(?,?,?,?,?,?,1)')
       .run('caixa-da-feira-ods', 'Vendas:6', 'hash da linha original', sale.id, 'sha original', new Date().toISOString());
     if (version < 4) legacyDatabase(original,version);
+    if (version === 4) original.exec('ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
     const expectedRecords = version >= 3 ? original.prepare('SELECT * FROM spreadsheet_records').all() : [];
-    const expectedFairs = version === 4 ? original.prepare('SELECT * FROM fairs').all() : null;
+    const expectedFairs = version >= 4 ? original.prepare('SELECT * FROM fairs').all() : null;
     const expected = rows(original), backup = join(folder, 'backup.sqlite'), target = join(folder, 'restaurado.sqlite');
     writeFileSync(backup, original.serialize());
     const before = hash(backup), result = restore(backup, target);
     assert.equal(result.status, 0, result.stderr);
     restored = new Database(target, { readonly: true });
-    assert.equal(restored.pragma('user_version', { simple: true }), 4);
+    assert.equal(restored.pragma('user_version', { simple: true }), schemaVersion);
     assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
     const actual = rows(restored);
+    if (version < 5) for (let i=0;i<actual.length;i++) actual[i]=withoutDeletedAt(actual[i]);
     if (version < 4) for (let i=0;i<actual.length;i++) actual[i]=withoutFairId(actual[i]);
     if (version === 1) actual[1] = actual[1].map(({ version, ...row }) => { assert.equal(version, 1); return row; });
     assert.deepEqual(actual, expected);
@@ -57,7 +64,13 @@ for (const version of [1, 2, 3,4] as const) test(`restaurador conserva backup e 
     if (expectedFairs) assert.deepEqual(restored.prepare('SELECT * FROM fairs').all(),expectedFairs);
     const bootstrap = new CashRegister(restored,1).bootstrap('2026-10-10');
     assert.equal(bootstrap.day.summary.netCents, 3000);
-    assert.ok(bootstrap.day.closedAt); assert.equal(bootstrap.products[0].stock, version===4 ? 2 : 3);
+    assert.ok(bootstrap.day.closedAt); assert.equal(bootstrap.products[0].stock, version>=4 ? 2 : 3);
+    if (version === 5) {
+      const deleted = restored.prepare('SELECT id FROM sales WHERE deleted_at IS NOT NULL').get() as { id: string };
+      assert.ok(deleted);
+      assert.equal(new CashRegister(restored).sales().some(sale => sale.id === deleted.id),false);
+      assert.equal(new CashRegister(restored).summary().netCents,1500);
+    }
     assert.equal(hash(backup), before);
     restored.close(); restored = undefined;
     const targetBefore = hash(target), repeated = restore(backup, target);
@@ -74,7 +87,7 @@ test('restaurador recusa arquivo inválido, versão futura e esquema de outro pr
   try {
     const text = join(folder, 'texto.sqlite'); writeFileSync(text, 'arquivo que não é SQLite');
     const future = join(folder, 'future.sqlite'), futureDb = new Database(future);
-    futureDb.pragma('user_version = 5'); futureDb.close();
+    futureDb.pragma(`user_version = ${schemaVersion + 1}`); futureDb.close();
     const foreign = join(folder, 'foreign.sqlite'), foreignDb = new Database(foreign);
     foreignDb.exec('CREATE TABLE qualquer(id INTEGER); PRAGMA user_version = 2'); foreignDb.close();
     for (const [source, message] of [[text, /não é um banco SQLite/], [future, /incompatível/], [foreign, /esquema esperado/]] as const) {

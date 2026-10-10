@@ -121,6 +121,9 @@ try {
     return response.ok;
   }, 'driver WebKit pronto');
   await newSession();
+  const applicationRoute = await fetch(`http://127.0.0.1:${apiPort}/historico`);
+  assert.equal(applicationRoute.status, 200, 'fallback da interface sob a pasta de instalação .local');
+  assert.match(await applicationRoute.text(), /<app-root>/);
   console.log('Janela WebKit:', await execute('return {width: innerWidth, height: innerHeight, scale: devicePixelRatio, screenWidth: screen.availWidth, screenHeight: screen.availHeight, columns: getComputedStyle(document.querySelector(".sales-layout")).gridTemplateColumns};'));
   assert.equal(await execute('const panels = document.querySelectorAll(".sales-layout > section"); return Math.abs(panels[0].getBoundingClientRect().top - panels[1].getBoundingClientRect().top) < 2;'), true,
     'Produtos e pedido devem aparecer lado a lado no tamanho inicial do notebook.');
@@ -157,19 +160,39 @@ try {
     assert.equal(exported.pragma('integrity_check', { simple: true }), 'ok');
     assert.equal(new CashRegister(exported).sales().length, 1);
   } finally { exported.close(); }
+  // A confirmação é Angular: funciona no WebKit sem depender de window.confirm.
+  await click('.history-order .delete-order');
+  await until(async () => (await text('.delete-confirmation')).includes('15,00'), 'confirmação de exclusão exibida');
+  const beforeConfirm = await (await fetch(`http://127.0.0.1:${apiPort}/api/bootstrap?date=${encodeURIComponent(date)}`)).json();
+  assert.equal(beforeConfirm.sales.length, 1, 'abrir confirmação não exclui o pedido');
+  const deleteScreenshot = await command('GET', `/session/${session}/screenshot`);
+  await writeFile(join(output, 'tauri-excluir-pedido.png'), Buffer.from(deleteScreenshot, 'base64'));
+  await click('.delete-confirmation .secondary');
+  await until(async () => await execute('return document.querySelector(".delete-confirmation") === null;'), 'Voltar fecha a confirmação');
+  await click('.history-order .delete-order');
+  await until(async () => (await text('.delete-confirmation')).includes('15,00'), 'confirmação reaberta');
+  await click('.delete-confirm-button');
+  await until(async () => await execute('return document.querySelectorAll(".history-order").length === 0;'), 'pedido excluído no histórico WebKit');
+  const corrected = await (await fetch(`http://127.0.0.1:${apiPort}/api/bootstrap?date=${encodeURIComponent(date)}`)).json();
+  assert.equal(corrected.sales.length, 0); assert.equal(corrected.products[0].stock, 10);
+  assert.equal(corrected.fair.summary.netCents, 0);
+  const correctedCsv = await (await fetch(`http://127.0.0.1:${apiPort}/api/export/sales.csv`)).text();
+  assert.equal(correctedCsv.includes(bootstrap.sales[0].id), false);
   await closeWindow();
   const restored = openDatabase(database);
   try {
     assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
     assert.deepEqual(restored.pragma('foreign_key_check'), []);
-    assert.equal(new CashRegister(restored).sales().length, 1);
+    assert.equal(new CashRegister(restored).sales().length, 0);
+    assert.equal(new CashRegister(restored).products()[0].stock, 10);
+    assert.ok(restored.prepare('SELECT deleted_at FROM sales WHERE id=?').get(bootstrap.sales[0].id)?.deleted_at);
   } finally { restored.close(); }
   // Verifica também a morte abrupta do pai, fora da sessão de automação WebKit.
   abruptApp = spawn(binary, [], { env: isolatedEnv, stdio: 'ignore' });
   await until(async () => !(await listenerIsClosed()), 'nova abertura antes da interrupção abrupta');
   abruptApp.kill('SIGKILL');
   await until(listenerIsClosed, 'Node encerrado pelo kernel após morte abrupta do pai', 10_000);
-  console.log('Desktop WebKit: janela Angular, segunda instância, rascunho após reabrir, pedido/estoque, exportações com diálogo, backup e encerramento normal/abrupto passaram.');
+  console.log('Desktop WebKit: janela Angular, segunda instância, rascunho após reabrir, pedido/estoque, exportações com diálogo, backup, confirmação/exclusão e encerramento normal/abrupto passaram.');
 } finally {
   if (session) await command('DELETE', `/session/${session}/window`).catch(() => {});
   if (session) await command('DELETE', `/session/${session}`).catch(() => {});

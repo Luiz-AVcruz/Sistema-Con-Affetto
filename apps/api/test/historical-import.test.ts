@@ -84,6 +84,24 @@ test('repetir a mesma origem preserva recebimento posterior, cancelamento e snap
   } finally { db.close(); }
 });
 
+test('repetir a importação não recria pedidos excluídos nem devolve estoque novamente', () => {
+  const { db, register, nativeSale } = fixture();
+  try {
+    const original = source(); importHistory(db, original);
+    const closing = register.day('2026-10-09');
+    const gift = register.sales().find(sale => sale.paymentMethod === 'Não cobrado')!;
+    const cancelled = register.sales().find(sale => sale.status === 'Cancelado')!;
+    register.deleteSale(gift.id); register.deleteSale(cancelled.id); register.deleteSale(nativeSale.id);
+    const before = rows(db), catalog = register.products();
+    assert.equal(importHistory(db, original).alreadyImported, true);
+    assert.deepEqual(rows(db), before); assert.deepEqual(register.products(), catalog);
+    assert.deepEqual(register.day('2026-10-09'), closing);
+    assert.equal(register.sales().some(sale => [gift.id, cancelled.id, nativeSale.id].includes(sale.id)), false);
+    assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
+    assert.deepEqual(db.pragma('foreign_key_check'), []);
+  } finally { db.close(); }
+});
+
 test('origem editada, linha inserida ou removida após migração é recusada sem alterar registros', () => {
   const { db } = fixture();
   try {

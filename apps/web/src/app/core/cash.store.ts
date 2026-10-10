@@ -90,6 +90,11 @@ export class CashStore {
     if (fairId === undefined || this.data()?.fair.closedAt) { this.error.set('Esta feira está encerrada e não aceita cancelamentos.'); return Promise.resolve(false); }
     return this.mutate(() => firstValueFrom(this.http.post(`/api/sales/${id}/cancel`, {}, { params: { fairId } })), 'Pedido cancelado.');
   }
+  deleteSale(id: string, fairId: number) {
+    if (this.data()?.fair.id !== fairId) { this.error.set('A feira selecionada mudou. Confira o pedido antes de tentar novamente.'); return Promise.resolve(false); }
+    if (this.data()?.fair.closedAt) { this.error.set('Esta feira está encerrada e não permite excluir pedidos.'); return Promise.resolve(false); }
+    return this.mutate(() => firstValueFrom(this.http.delete(`/api/sales/${id}`, { params: { fairId }, body: {} })), 'Pedido excluído do histórico.');
+  }
   saveDay(input: CashInput, close = false) {
     const fairId = this.data()?.fair.id;
     if (fairId === undefined || this.data()?.fair.closedAt) { this.error.set('Esta feira está encerrada e não aceita alterações no fechamento.'); return Promise.resolve(false); }

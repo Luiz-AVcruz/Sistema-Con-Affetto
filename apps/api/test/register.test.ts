@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SaleInput, Product, PaymentMethod } from '@caixa/shared';
 import Database from 'better-sqlite3';
-import { openDatabase } from '../src/database.js';
+import { openDatabase, schemaVersion } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
 import { productSchema, saleSchema, businessDate } from '../src/validation.js';
 import { projectRoot } from '../src/paths.js';
@@ -196,7 +196,7 @@ for (const [oldVersion, legacyColumn] of [[1, false], [1, true], [2, true], [3,t
     const tables = ['owners','products','sales','sale_items','days','stock_adjustments'];
     const before = tables.map(table => db!.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
     db.close(); db = openDatabase(path);
-    assert.equal(db.pragma('user_version', { simple: true }), 4);
+    assert.equal(db.pragma('user_version', { simple: true }), schemaVersion);
     assert.deepEqual(db.prepare('SELECT * FROM spreadsheet_records').all(), []);
     const actual = tables.map(table => withoutFairId(db!.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all() as Record<string,unknown>[]));
     if (!legacyColumn) actual[1] = actual[1].map(row => {
@@ -215,7 +215,7 @@ for (const [oldVersion, legacyColumn] of [[1, false], [1, true], [2, true], [3,t
 test('recusar banco de versão futura preserva o modo de journal e o arquivo', () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-versao-')), path = join(folder, 'future.sqlite');
   try {
-    const future = new Database(path); future.pragma('user_version = 5'); future.close();
+    const future = new Database(path); future.pragma(`user_version = ${schemaVersion + 1}`); future.close();
     const before = readFileSync(path);
     assert.throws(() => openDatabase(path), /versão mais nova/);
     assert.deepEqual(readFileSync(path), before);

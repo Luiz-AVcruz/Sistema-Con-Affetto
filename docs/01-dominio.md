@@ -50,6 +50,14 @@ O desconto não pode superar o bruto; a taxa não pode superar o cobrado. Em um 
 
 Permutas e brindes mantêm o preço de catálogo no histórico, mas têm cobrança e líquido zero. Não aceitam ajustes financeiros nem situação pendente.
 
+## Cancelar ou excluir um pedido
+
+Cancelar uma venda desfeita mantém o pedido no histórico com situação `Cancelado`, remove sua receita e devolve o estoque se havia baixa. Excluir serve para um lançamento acidental que não precisa constar nos relatórios: o pedido desaparece do histórico, dos CSVs e dos resumos. A confirmação ocorre na própria interface, com valor e itens do pedido.
+
+Uma exclusão de pedido pago devolve o estoque uma única vez. Pedidos pendentes não baixaram estoque; pedidos já cancelados já foram tratados. Excluí-los não altera novamente as quantidades. Estoque `A contar` permanece desconhecido.
+
+O dia do pedido e, quando houver, o dia do recebimento precisam estar abertos. Uma feira encerrada também impede excluir. O programa conserva um marcador interno e os dados do comando para que repetir o envio original ou a importação da planilha não recrie um pedido excluído. Esses registros fazem parte do backup SQLite, embora não sejam apresentados no histórico ou nos CSVs.
+
 ## Datas e fechamentos
 
 O pedido guarda a data de origem. O recebimento guarda outra data quando uma pendência é quitada posteriormente. Uma pendência registrada no dia 10 e paga no dia 11 entra no dinheiro do dia 11. O fechamento já guardado do dia 10 conserva os números conhecidos quando foi fechado, incluindo as pendências existentes naquele momento.

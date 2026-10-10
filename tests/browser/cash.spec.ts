@@ -42,6 +42,7 @@ test('histórico importado, horário e fluxo de venda, recebimento, cancelamento
   await expect(historical).toContainText('08/10/2026');
   await expect(historical).toContainText('Horário não registrado na planilha');
   await expect(historical.getByRole('button', { name: 'Cancelar pedido', exact: true })).toBeDisabled();
+  await expect(historical.getByRole('button', { name: 'Excluir pedido', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: 'Mostrar todos os dias' }).uncheck();
   await expect(historical).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'Mostrar todos os dias' }).check();
@@ -60,6 +61,39 @@ test('histórico importado, horário e fluxo de venda, recebimento, cancelamento
   page.once('dialog', dialog => dialog.accept());
   await barter.getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
   await expect(barter).toContainText('Cancelado');
+  // Um cancelamento pode ser retirado do histórico sem devolver estoque outra vez.
+  const beforeDelete = await (await request.get('/api/bootstrap?date=' + selectedDate)).json();
+  await barter.getByRole('button', { name: 'Excluir pedido', exact: true }).click();
+  await expect(barter.getByRole('region', { name: 'Confirmar exclusão deste lançamento?' })).toBeVisible();
+  await barter.getByRole('button', { name: 'Voltar', exact: true }).click();
+  await expect(barter.getByRole('region')).toHaveCount(0);
+  await expect(barter).toHaveCount(1);
+  await barter.getByRole('button', { name: 'Excluir pedido', exact: true }).click();
+  await barter.getByRole('button', { name: 'Confirmar exclusão', exact: true }).click();
+  await expect(barter).toHaveCount(0);
+  const afterDelete = await (await request.get('/api/bootstrap?date=' + selectedDate)).json();
+  expect(afterDelete.products).toEqual(beforeDelete.products);
+  expect(afterDelete.fair.summary).toEqual(beforeDelete.fair.summary);
+  // Pedido pago acidental: a primeira escolha só abre a confirmação; confirmar corrige os saldos.
+  const accidentalProduct = beforeDelete.products.find((product: { name: string }) => product.name === 'Pipoca');
+  const accidentalInput = { requestId: crypto.randomUUID(), fairId: beforeDelete.fair.id, date: selectedDate,
+    paymentMethod: 'Pix', status: 'Pago', note: 'Lançamento acidental de teste', items: [{productId: accidentalProduct.id,
+      quantity: 1, expectedPriceCents: accidentalProduct.priceCents, discountCents: 0, feeCents: 0}] };
+  expect((await request.post('/api/sales', { data: accidentalInput })).ok()).toBeTruthy();
+  await page.reload();
+  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  const accidental = page.locator('.history-order').filter({ hasText: 'Lançamento acidental de teste' });
+  await accidental.getByRole('button', { name: 'Excluir pedido', exact: true }).click();
+  await expect(accidental.getByRole('region')).toContainText('15,00');
+  const confirming = await (await request.get('/api/bootstrap?date=' + selectedDate)).json();
+  expect(confirming.sales.some((sale: { id: string }) => sale.id === accidentalInput.requestId)).toBeTruthy();
+  await accidental.getByRole('button', { name: 'Confirmar exclusão', exact: true }).click();
+  await expect(accidental).toHaveCount(0);
+  const corrected = await (await request.get('/api/bootstrap?date=' + selectedDate)).json();
+  expect(corrected.products.map((product: { stock: number | null }) => product.stock)).toEqual(afterDelete.products.map((product: { stock: number | null }) => product.stock));
+  expect(corrected.fair.summary).toEqual(afterDelete.fair.summary);
+  expect((await request.post('/api/sales', { data: accidentalInput })).status()).toBe(410);
+  expect(await (await request.get('/api/export/sales.csv')).text()).not.toContain(accidentalInput.requestId);
   await page.getByRole('button', { name:'Vender', exact:true }).click();
   await page.getByRole('button', { name:'Adicionar Pipoca', exact:true }).click();
   await expect(page.getByTestId('cart-total')).toContainText('15,00');
@@ -75,6 +109,7 @@ test('histórico importado, horário e fluxo de venda, recebimento, cancelamento
   await expect(page.getByRole('button', { name: 'Adicionar Pipoca', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
   await expect(page.locator('.history-order').filter({ hasText: 'Caneca' }).locator('.order-time')).toHaveText('Registrado em ' + registered);
+  await expect(page.locator('.history-order').filter({ hasText: 'Caneca' }).getByRole('button', { name: 'Excluir pedido', exact: true })).toBeDisabled();
   await page.getByRole('button',{name:'Feiras',exact:true}).click();
   await page.getByRole('textbox',{name:'Nome da feira',exact:true}).fill('Feira de teste');
   await page.getByRole('textbox',{name:'Meta financeira (R$)',exact:true}).fill('100,00');

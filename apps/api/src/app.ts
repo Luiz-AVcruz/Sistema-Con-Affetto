@@ -27,7 +27,7 @@ export function createApp(register: CashRegister, frontend?: string) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
     if (req.path.startsWith('/api')) res.setHeader('Cache-Control', 'no-store');
-    if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.is('application/json')) {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !req.is('application/json')) {
       res.status(415).json({ error: 'Envie os dados como JSON.' }); return;
     }
     next();
@@ -57,6 +57,10 @@ export function createApp(register: CashRegister, frontend?: string) {
     res.json(context(req.query['fairId']).receiveSale(z.uuid().parse(req.params['id']), input.date, input.paymentMethod));
   });
   app.post('/api/sales/:id/cancel', (req, res) => res.json(context(req.query['fairId']).cancelSale(z.uuid().parse(req.params['id']))));
+  app.delete('/api/sales/:id', (req, res) => {
+    z.object({}).strict().parse(req.body);
+    res.json(context(req.query['fairId']).deleteSale(z.uuid().parse(req.params['id'])));
+  });
   app.put('/api/days/:date', (req, res) => res.json(context(req.query['fairId']).saveDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.post('/api/days/:date/close', (req, res) => res.json(context(req.query['fairId']).closeDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.get('/api/export/sales.csv', (req, res) => {
@@ -84,8 +88,8 @@ export function createApp(register: CashRegister, frontend?: string) {
     const header = ['Feira ID','Feira','Dia','Situação','Recebido','Líquido recebido','Pendente','Troco inicial','Entradas extras','Retiradas','Dinheiro esperado','Dinheiro contado','Diferença','Observação'];
     const rows = exportFairs(req.query['fairId']).flatMap(fair => {
       const selected = new CashRegister(register.db,fair.id);
-      const dates = register.db.prepare(`SELECT date FROM days WHERE fair_id=? UNION SELECT date FROM sales WHERE fair_id=?
-        UNION SELECT payment_date AS date FROM sales WHERE fair_id=? AND payment_date IS NOT NULL ORDER BY date`).all(fair.id,fair.id,fair.id) as { date: string }[];
+      const dates = register.db.prepare(`SELECT date FROM days WHERE fair_id=? UNION SELECT date FROM sales WHERE fair_id=? AND deleted_at IS NULL
+        UNION SELECT payment_date AS date FROM sales WHERE fair_id=? AND deleted_at IS NULL AND payment_date IS NOT NULL ORDER BY date`).all(fair.id,fair.id,fair.id) as { date: string }[];
       return dates.map(({ date }) => {
         const day = selected.day(date);
         return [fair.id,fair.name,date,day.closedAt ? 'Fechado' : 'Em andamento',reais(day.summary.receivedCents),reais(day.summary.netCents),reais(day.summary.pendingCents),
@@ -104,7 +108,9 @@ export function createApp(register: CashRegister, frontend?: string) {
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Rota da API inexistente.' }));
   if (frontend && existsSync(resolve(frontend, 'index.html'))) {
     app.use(express.static(frontend));
-    app.get('/{*path}', (_req, res) => res.sendFile(resolve(frontend, 'index.html')));
+    // A instalação fica sob .local. Usar root evita tratar a pasta de
+    // instalação como arquivo oculto sem liberar dotfiles requisitados.
+    app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: resolve(frontend) }));
   } else app.get('/', (_req, res) => res.type('text').send('API do caixa funcionando. Execute npm run build para abrir a interface ou npm run dev para desenvolver.'));
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof ZodError) { res.status(400).json({ error: 'Confira os campos informados.', details: error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`) }); return; }

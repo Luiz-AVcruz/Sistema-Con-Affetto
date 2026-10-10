@@ -102,12 +102,12 @@ export class CashRegister {
 
   sales(): Sale[] {
     const rows = this.db.prepare(`SELECT s.*, CASE WHEN EXISTS(SELECT 1 FROM spreadsheet_records r WHERE r.sale_id=s.id)
-      THEN 'Planilha' ELSE 'Aplicativo' END AS origin FROM sales s WHERE s.fair_id=?
+      THEN 'Planilha' ELSE 'Aplicativo' END AS origin FROM sales s WHERE s.fair_id=? AND s.deleted_at IS NULL
       ORDER BY s.date DESC, origin ASC, s.created_at DESC, s.rowid DESC`).all(this.fairId) as SaleRow[];
     const allItems = this.db.prepare(`SELECT sale_id AS saleId, product_id AS productId, quantity, name,
       owner_id AS ownerId, owner_name AS ownerName, price_cents AS priceCents, price_cents AS expectedPriceCents,
       discount_cents AS discountCents, fee_cents AS feeCents, gross_cents AS grossCents,
-      i.total_cents AS totalCents, i.net_cents AS netCents FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.fair_id=? ORDER BY i.id`).all(this.fairId) as (SaleItem & { saleId: string })[];
+      i.total_cents AS totalCents, i.net_cents AS netCents FROM sale_items i JOIN sales s ON s.id=i.sale_id WHERE s.fair_id=? AND s.deleted_at IS NULL ORDER BY i.id`).all(this.fairId) as (SaleItem & { saleId: string })[];
     return rows.map(row => {
       const items = allItems.filter(item => item.saleId === row.id).map(({ saleId, ...item }) => item);
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
@@ -145,9 +145,10 @@ export class CashRegister {
       // A feira fica no registro, preservando o hash de retries de clientes anteriores.
       const { fairId: _fairId, ...payload } = input;
       const hash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-      const existing = this.db.prepare('SELECT request_hash,fair_id FROM sales WHERE id=?').get(input.requestId) as { request_hash: string; fair_id: number } | undefined;
+      const existing = this.db.prepare('SELECT request_hash,fair_id,deleted_at FROM sales WHERE id=?').get(input.requestId) as { request_hash: string; fair_id: number; deleted_at: string | null } | undefined;
       if (existing) {
         requireCondition(existing.fair_id === this.fairId && existing.request_hash === hash, 'Este pedido já foi enviado com outros valores ou em outra feira. Confira o histórico antes de iniciar outro.');
+        requireCondition(!existing.deleted_at, 'Este pedido foi excluído e não será registrado novamente. Inicie um novo pedido somente se for outra venda.', 410);
         return this.sales().find(sale => sale.id === input.requestId)!;
       }
       this.assertOpen(input.date);
@@ -197,6 +198,22 @@ export class CashRegister {
       this.db.prepare("UPDATE sales SET status='Cancelado' WHERE id=?").run(id);
       return this.sales().find(sale => sale.id === id)!;
     })();
+  }
+
+  deleteSale(id: string): { id: string; deleted: true } {
+    return this.db.transaction(() => {
+      const row = this.db.prepare('SELECT deleted_at FROM sales WHERE id=? AND fair_id=?').get(id, this.fairId) as { deleted_at: string | null } | undefined;
+      requireCondition(row, 'Pedido inexistente nesta feira.', 404);
+      // Repetir uma exclusão confirmada não muda estoque nem registros fechados.
+      if (row.deleted_at) return { id, deleted: true as const };
+      const sale = this.sales().find(sale => sale.id === id)!;
+      this.assertOpen(sale.date);
+      if (sale.paymentDate && sale.paymentDate !== sale.date) this.assertOpen(sale.paymentDate);
+      if (sale.status === 'Pago') this.changeStock(sale.items, false);
+      this.db.prepare('UPDATE sales SET deleted_at=? WHERE id=? AND fair_id=?')
+        .run(new Date().toISOString(), id, this.fairId);
+      return { id, deleted: true as const };
+    }).immediate();
   }
 
   summary(date?: string): Summary { return summarize(this.sales(), this.owners(), date); }

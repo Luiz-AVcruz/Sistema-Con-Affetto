@@ -6,7 +6,7 @@
 | --- | --- |
 | `owners` | Participantes do catálogo. |
 | `products` | Cadastro atual e estoque disponível. |
-| `sales` | Identificador, chave de reenvio, datas, pagamento, situação e observação. |
+| `sales` | Identificador, chave de reenvio, datas, pagamento, situação, observação e marcador interno de exclusão. |
 | `sale_items` | Quantidades, valores e dados históricos de cada item. |
 | `days` | Conferência de dinheiro e snapshot do fechamento. |
 | `fairs` | Nome, meta, período e snapshot definitivo de cada feira. |
@@ -62,13 +62,15 @@ O carrinho mantém `requestId` até receber confirmação. O backend usa esse UU
 
 Idempotência não identifica duas compras diferentes por coincidirem em produtos e valor. Dois UUIDs representam dois comandos distintos.
 
+`deleted_at` retira pedidos acidentais das leituras operacionais sem apagar seu UUID, hash ou vínculos de origem. A exclusão e a devolução de estoque ocorrem juntas em transação `IMMEDIATE`. Repetir a exclusão retorna sucesso sem outra devolução. Reenviar o pedido original excluído retorna `410`, inclusive após restauração; o cliente não deve criar outra identidade automaticamente. Recebimento e cancelamento de um pedido excluído retornam `404`. As datas presentes somente em pedidos excluídos não geram linhas fictícias no CSV de fechamentos.
+
 ## Persistência e backup
 
 SQLite usa WAL e `synchronous=FULL`. O WAL pode guardar alterações confirmadas que ainda não estão incorporadas ao arquivo principal. Por isso, copiar apenas `caixa.sqlite` enquanto ele está aberto não é o mecanismo de backup do programa.
 
 O endpoint de backup serializa o conteúdo do banco aberto. O teste grava esses bytes em um arquivo, abre esse arquivo em outro SQLite e verifica integridade, valores e fechamento. O cabeçalho de modo WAL não é aceito pela desserialização direta em memória da dependência; abrir a cópia por arquivo corresponde ao uso real do backup. Isso comprova o snapshot lógico e sua legibilidade; não equivale a garantir sobrevivência de qualquer falha de disco ou energia.
 
-O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Aceita v1, v2, v3 e v4 e migra apenas a cópia quando necessário. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis.
+O restaurador abre uma cópia temporária em disco, verifica versão, colunas das tabelas, integridade e chaves estrangeiras e escreve somente em um destino novo. Aceita v1 a v5 e migra apenas a cópia quando necessário. Consolida o WAL antes de copiá-la para o destino. O arquivo anterior e o backup de entrada continuam disponíveis. O backup contém também os dados internos dos pedidos excluídos; a restauração mantém sua exclusão e o estoque corrigido.
 
 O destino precisa estar livre também de `-wal`, `-shm` e `-journal`. Um WAL residual de outro banco pode ser reaplicado ao abrir o arquivo restaurado, produzindo registros diferentes mesmo com `integrity_check` igual a `ok`. O programa recusa esse caminho e preserva os auxiliares. O teste reproduz a presença de um WAL real sem o arquivo principal.
 
@@ -77,6 +79,8 @@ O destino precisa estar livre também de `-wal`, `-shm` e `-journal`. Um WAL res
 `PRAGMA user_version` identifica o schema. A versão 1 foi usada no primeiro protótipo; a versão 2 acrescenta a proteção de edição por `products.version`; a versão 3 acrescenta `spreadsheet_records`. Um banco novo recebe as tabelas atuais. Ao abrir v1, uma transação adiciona a coluna de versão com valor inicial 1 se estiver ausente; os valores existentes são preservados. Depois, v1 ou v2 recebem os vínculos de importação em outra transação, sem atualizar as seis tabelas anteriores. Reabrir v3 não repete essas alterações.
 
 A v4 acrescenta feiras e identifica dias pelo par `(fair_id,date)`. Os registros anteriores pertencem à feira inicial. A reconstrução das chaves de dias e origens importadas preserva os snapshots e confere as referências antes de confirmar. Consulte [operação e migração de feiras](10-feiras.md).
+
+A v5 acrescenta `sales.deleted_at`, inicialmente `NULL` em todos os pedidos existentes. A migração não exclui vendas nem muda seus itens, estoque, hashes, vínculos, feiras ou fechamentos. Encerrar a versão anterior antes de abrir o banco na versão nova evita que um processo antigo leia pedidos excluídos sem considerar o marcador. A reversão usa uma cópia do backup anterior à migração com o aplicativo encerrado, conservando também o banco atual; não se removem colunas no banco de uso.
 
 Os testes partem das estruturas antigas v1, v2 e v3 com vendas, estoque e fechamento. Comparam os registros anteriores, integridade e reabertura. A restauração v3 preserva os vínculos de origem, e v4 preserva também os registros de feiras. Um banco de versão mais nova é recusado antes de mudar seu modo de journal.
 
