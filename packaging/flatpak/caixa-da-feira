@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+: "${XDG_DATA_HOME:?O Flatpak precisa definir XDG_DATA_HOME}"
+export CAIXA_DB="${CAIXA_DB:-$XDG_DATA_HOME/br.com.caixadafeira.local/caixa.sqlite}"
+exec /app/lib/caixa-da-feira/caixa-da-feira "$@"

@@ -15,7 +15,10 @@
     "import:history": "npm run build -w @caixa/shared && npm run import:history -w @caixa/api --",
     "desktop:dev": "npm run dev -w @caixa/desktop",
     "desktop:build": "npm run build -w @caixa/desktop",
-    "desktop:install": "npm run install:local -w @caixa/desktop"
+    "desktop:install": "npm run install:local -w @caixa/desktop",
+    "flatpak:build": "node scripts/flatpak-build.mjs",
+    "flatpak:test": "node scripts/flatpak-runtime-smoke.mjs",
+    "test:packaging": "node --test tests/packaging/*.test.mjs"
   },
   "devDependencies": { "@playwright/test": "^1.56.0", "concurrently": "^9.2.0", "typescript": "~6.0.0" }
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>br.com.caixadafeira.local</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>Caixa da Feira</name>
+  <summary>Controle local de vendas, estoque e fechamento da feira</summary>
+  <description>
+    <p>Aplicativo de caixa para um operador, com pedidos, pagamentos,
+    estoque, histórico de feiras, exportação CSV e backup SQLite.</p>
+    <p>Funciona sem internet após a instalação. Os dados ficam no computador
+    e não são sincronizados automaticamente com a planilha ou outro caixa.</p>
+  </description>
+  <launchable type="desktop-id">br.com.caixadafeira.local.desktop</launchable>
+  <provides><binary>caixa-da-feira</binary></provides>
+  <releases><release version="0.1.0" date="2026-10-11" /></releases>
+  <content_rating type="oars-1.1" />
+</component>

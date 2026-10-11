@@ -1,0 +1,60 @@
+{
+  "app-id": "br.com.caixadafeira.local",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "49",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.node24",
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "caixa-da-feira",
+  "branch": "stable",
+  "separate-locales": false,
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--share=ipc",
+    "--device=dri",
+    "--env=GTK_USE_PORTAL=1"
+  ],
+  "build-options": {
+    "prepend-path": "/usr/lib/sdk/node24/bin:/usr/lib/sdk/rust-stable/bin",
+    "build-args": ["--share=network"],
+    "env": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_HOME": "/run/build/caixa-da-feira/.cargo"
+    }
+  },
+  "modules": [
+    {
+      "name": "caixa-da-feira",
+      "buildsystem": "simple",
+      "sources": [
+        { "type": "dir", "path": "../../dist/flatpak/source" }
+      ],
+      "build-commands": [
+        "npm ci --cache .npm-cache --foreground-scripts --no-audit --no-fund",
+        "cd node_modules/better-sqlite3 && node /usr/lib/sdk/node24/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release --force_build=1 --nodedir=/usr/lib/sdk/node24",
+        "rm -rf node_modules/better-sqlite3/prebuilds",
+        "npm run prepare:resources -w @caixa/desktop",
+        "cargo build --release --locked --manifest-path apps/desktop/src-tauri/Cargo.toml",
+        "install -Dm755 apps/desktop/src-tauri/target/release/caixa-da-feira-desktop /app/lib/caixa-da-feira/caixa-da-feira",
+        "cp -a apps/desktop/src-tauri/resources /app/lib/caixa-da-feira/resources",
+        "install -Dm644 scripts/restaurar-backup.mjs /app/lib/caixa-da-feira/resources/scripts/restaurar-backup.mjs",
+        "install -Dm644 apps/api/dist/database.js /app/lib/caixa-da-feira/resources/apps/api/dist/database.js",
+        "install -Dm644 apps/api/package.json /app/lib/caixa-da-feira/resources/apps/api/package.json",
+        "install -Dm755 packaging/flatpak/caixa-da-feira /app/bin/caixa-da-feira",
+        "install -Dm755 packaging/flatpak/caixa-restaurar-backup /app/bin/caixa-restaurar-backup",
+        "install -Dm644 packaging/flatpak/br.com.caixadafeira.local.desktop /app/share/applications/br.com.caixadafeira.local.desktop",
+        "install -Dm644 packaging/flatpak/br.com.caixadafeira.local.metainfo.xml /app/share/metainfo/br.com.caixadafeira.local.metainfo.xml",
+        "install -Dm644 apps/desktop/icons/caixa-da-feira.svg /app/share/icons/hicolor/scalable/apps/br.com.caixadafeira.local.svg"
+      ],
+      "run-tests": true,
+      "test-commands": [
+        "npm test",
+        "node --test tests/packaging/*.test.mjs",
+        "cargo test --release --locked --offline --manifest-path apps/desktop/src-tauri/Cargo.toml"
+      ]
+    }
+  ]
+}

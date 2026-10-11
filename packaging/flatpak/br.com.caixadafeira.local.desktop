@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Caixa da Feira
+Comment=Controle local de vendas e fechamento da feira
+Exec=caixa-da-feira
+Icon=br.com.caixadafeira.local
+Terminal=false
+StartupNotify=true
+StartupWMClass=caixa-da-feira
+Categories=Office;Finance;

@@ -16,7 +16,11 @@ Antes de usar o aplicativo como caixa principal: conferir o catálogo, o histór
 
 ## Executar
 
-Para o aplicativo desktop, consulte [instalação e operação local](docs/11-desktop.md). O fluxo abaixo executa a interface web de desenvolvimento/validação.
+Para o aplicativo desktop, consulte [instalação e operação local](docs/11-desktop.md).
+Para instalar o pacote pronto no EndeavourOS ou Zorin, sem compilar em cada
+máquina, consulte [Flatpak privado](docs/12-flatpak.md). O banco é restaurado
+separadamente e não é incluído no pacote. O fluxo abaixo executa a interface
+web de desenvolvimento/validação.
 
 Requisitos: Node 24 LTS, npm e um navegador atual. As versões exatas das dependências estão no `package-lock.json`. Não é necessário instalar um servidor de banco de dados.
 

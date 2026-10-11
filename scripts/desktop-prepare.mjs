@@ -1,7 +1,7 @@
 import { cp, chmod, copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
@@ -29,7 +29,9 @@ const frontendSource = join(root, 'apps/web/dist/browser');
 const sqliteSource = join(nodeModules, 'better-sqlite3');
 const bindingSource = join(nodeModules, 'bindings');
 const fileUriSource = join(nodeModules, 'file-uri-to-path');
-const addonSource = join(sqliteSource, 'build/Release/better_sqlite3.node');
+const sqlitePackage = JSON.parse(await readFile(join(sqliteSource, 'package.json'), 'utf8'));
+const builtAddon = join(sqliteSource, 'build/Release/better_sqlite3.node');
+const addonSource = await exists(builtAddon) ? builtAddon : join(sqliteSource, `prebuilds/${process.platform}-${process.arch}.node`);
 
 for (const required of [nodeSource, serverSource, join(frontendSource, 'index.html'), addonSource]) {
   if (!await exists(required)) throw new Error(`Artefato necessário não encontrado: ${required}`);
@@ -61,16 +63,23 @@ await build({
   }
 });
 
-for (const [source, target] of [
-  [sqliteSource, join(resourceRoot, 'node_modules/better-sqlite3')],
+const runtimeModules = [[sqliteSource, join(resourceRoot, 'node_modules/better-sqlite3')]];
+// A versão 13 usa Node-API; conservar os auxiliares somente para uma instalação
+// anterior que ainda use o loader `bindings` durante a atualização local.
+if (sqlitePackage.dependencies?.bindings) runtimeModules.push(
   [bindingSource, join(resourceRoot, 'node_modules/bindings')],
   [fileUriSource, join(resourceRoot, 'node_modules/file-uri-to-path')]
-]) {
+);
+for (const [source, target] of runtimeModules) {
   await cp(source, target, {
     recursive: true,
-    filter: (path) => !/(?:^|\/)(?:test|tests|benchmark|benchmark\.js|\.github)(?:\/|$)/.test(path)
+    filter: (path) => !/(?:^|\/)(?:test|tests|benchmark|benchmark\.js|\.github|build|prebuilds)(?:\/|$)/.test(relative(source, path))
   });
 }
+// Um único addon selecionado: o loader 13 prioriza prebuilds, portanto não os
+// levar junto ao binário que acabou de ser compilado dentro do SDK.
+await mkdir(join(resourceRoot, 'node_modules/better-sqlite3/build/Release'), { recursive: true });
+await copyFile(addonSource, join(resourceRoot, 'node_modules/better-sqlite3/build/Release/better_sqlite3.node'));
 
 // The application points to this page only if the Node service cannot start.
 await copyFile(join(app, 'src-tauri/error.html'), join(resourceRoot, 'frontend/desktop-error.html'));

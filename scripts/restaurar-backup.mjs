@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, constants } from 'node:fs';
+import { closeSync, copyFileSync, fsyncSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openDatabase, schemaVersion } from '../apps/api/dist/database.js';
@@ -16,11 +16,18 @@ const requiredColumns = {
 const [source, destination] = process.argv.slice(2);
 if (!source || !destination) { console.error('Uso: node scripts/restaurar-backup.mjs backup.sqlite novo-destino.sqlite'); process.exit(1); }
 const target = resolve(destination);
-if ([target, `${target}-wal`, `${target}-shm`, `${target}-journal`].some(path => existsSync(path))) {
+const targetPaths = [target, `${target}-wal`, `${target}-shm`, `${target}-journal`];
+function hasTargetFiles() {
+  return targetPaths.some(path => {
+    try { lstatSync(path); return true; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  });
+}
+if (hasTargetFiles()) {
   console.error('O destino já existe ou possui arquivos auxiliares. Nada foi sobrescrito. Escolha outro arquivo.'); process.exit(1);
 }
 const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-')), temporary = join(folder, 'backup.sqlite');
-let db;
+let db, staging, published = false;
 try {
   if (readFileSync(source).subarray(0,16).toString() !== 'SQLite format 3\0') throw new Error('O arquivo não é um banco SQLite.');
   // Abrir uma cópia em disco também respeita o cabeçalho WAL de backups reais.
@@ -48,7 +55,26 @@ try {
   if (db.pragma('wal_checkpoint(TRUNCATE)').some(result => result.busy !== 0)) throw new Error('Não foi possível consolidar a cópia do banco.');
   db.close(); db = undefined;
   mkdirSync(dirname(target), { recursive: true });
-  copyFileSync(temporary, target, constants.COPYFILE_EXCL);
+  // Copiar no mesmo filesystem e publicar por hardlink evita destino parcial
+  // após interrupção e mantém a recusa atômica de sobrescrever outro arquivo.
+  staging = mkdtempSync(join(dirname(target), '.caixa-restauracao-'));
+  const staged = join(staging, 'completo.sqlite');
+  copyFileSync(temporary, staged, constants.COPYFILE_EXCL);
+  const fd = openSync(staged, 'r');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
+  if (hasTargetFiles()) throw new Error('O destino já existe ou possui arquivos auxiliares. Nada foi sobrescrito. Escolha outro arquivo.');
+  linkSync(staged, target);
+  published = true;
+  const directory = openSync(dirname(target), 'r');
+  try { fsyncSync(directory); } finally { closeSync(directory); }
   console.log(`Cópia restaurada e validada: ${target}. O banco anterior foi preservado.`);
-} catch (error) { console.error(error.message); process.exitCode = 1; }
-finally { if (db?.open) db.close(); rmSync(folder, { recursive: true, force: true }); }
+} catch (error) {
+  console.error(error.message);
+  if (published) console.error(`O arquivo final foi publicado completo em ${target}, mas sua sincronização não foi confirmada. Conserve-o e verifique sua integridade antes de repetir.`);
+  process.exitCode = 1;
+}
+finally {
+  if (db?.open) db.close();
+  if (staging) rmSync(staging, { recursive: true, force: true });
+  rmSync(folder, { recursive: true, force: true });
+}

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  printf '%s\n' 'Uso: caixa-restaurar-backup backup.sqlite [novo-destino.sqlite]' >&2
+  exit 1
+fi
+: "${XDG_DATA_HOME:?O Flatpak precisa definir XDG_DATA_HOME}"
+destination="${2:-${CAIXA_DB:-$XDG_DATA_HOME/br.com.caixadafeira.local/caixa.sqlite}}"
+exec /app/lib/caixa-da-feira/resources/bin/node \
+  /app/lib/caixa-da-feira/resources/scripts/restaurar-backup.mjs "$1" "$destination"

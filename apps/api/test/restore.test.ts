@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, copyFileSync, symlinkSync, lstatSync, readlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
 import { openDatabase, schemaVersion } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
@@ -128,4 +129,66 @@ test('restaurador recusa auxiliares residuais sem arquivo principal e preserva u
     if (oldDb?.open) oldDb.close(); if (backupDb?.open) backupDb.close();
     rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test('restaurador recusa destino e auxiliares que sejam links simbólicos quebrados', () => {
+  const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-links-'));
+  const db = openDatabase(':memory:');
+  try {
+    const backup = join(folder, 'backup.sqlite'), target = join(folder, 'destino.sqlite');
+    writeFileSync(backup, db.serialize());
+    const before = hash(backup);
+    for (const suffix of ['', '-wal', '-shm', '-journal']) {
+      const path = `${target}${suffix}`, missing = join(folder, 'ausente.sqlite');
+      symlinkSync(missing, path);
+      const result = restore(backup, target);
+      assert.equal(result.status, 1); assert.match(result.stderr, /destino já existe/);
+      assert.equal(lstatSync(path).isSymbolicLink(), true);
+      assert.equal(readlinkSync(path), missing); assert.equal(hash(backup), before);
+      assert.equal(existsSync(target), false);
+      rmSync(path);
+    }
+  } finally { db.close(); rmSync(folder, { recursive: true, force: true }); }
+});
+
+for (const failure of ['erro', 'interrupcao'] as const) test(`restauração com ${failure} durante a cópia não publica destino parcial e permite repetir`, () => {
+  const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-falha-'));
+  const db = openDatabase(':memory:');
+  let restored: Database.Database | undefined;
+  try {
+    db.prepare('INSERT INTO owners(id,name) VALUES(1,?)').run('Participante de teste preservado');
+    const backup = join(folder, 'backup.sqlite'), target = join(folder, 'destino.sqlite'), preload = join(folder, 'falha.mjs');
+    writeFileSync(backup, db.serialize());
+    const before = hash(backup);
+    // A dependência deixa bytes parciais e falha durante a cópia de publicação.
+    // SIGKILL desafia o caso em que catch/finally não podem executar a limpeza.
+    writeFileSync(preload, `import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const copy = fs.copyFileSync; let copies = 0;
+fs.copyFileSync = (...args) => {
+  if (++copies !== 2) return copy(...args);
+  fs.writeFileSync(args[1], 'arquivo incompleto');
+  if (process.env.CAIXA_TEST_COPY_FAILURE === 'interrupcao') process.kill(process.pid, 'SIGKILL');
+  throw new Error('Falha de I/O durante a cópia de teste');
+};
+syncBuiltinESMExports();`);
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href,
+      join(projectRoot, 'scripts/restaurar-backup.mjs'), backup, target], {
+      encoding: 'utf8', env: { ...process.env, CAIXA_TEST_COPY_FAILURE: failure }
+    });
+    if (failure === 'interrupcao') assert.equal(result.signal, 'SIGKILL');
+    else { assert.equal(result.status, 1); assert.match(result.stderr, /Falha de I\/O/); }
+    assert.equal(existsSync(target), false, 'nenhum arquivo parcial no caminho final');
+    const residues = () => readdirSync(folder).filter(name => name.startsWith('.caixa-restauracao-'));
+    assert.equal(residues().length, failure === 'interrupcao' ? 1 : 0, 'resíduo abrupto é explícito e não bloqueia o destino');
+    assert.equal(hash(backup), before);
+    const retry = restore(backup, target);
+    assert.equal(retry.status, 0, retry.stderr);
+    restored = new Database(target, { readonly: true });
+    assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
+    assert.deepEqual(restored.pragma('foreign_key_check'), []);
+    assert.equal((restored.prepare('SELECT name FROM owners WHERE id=1').get() as {name: string}).name, 'Participante de teste preservado');
+    assert.equal(hash(backup), before);
+    assert.equal(residues().length, failure === 'interrupcao' ? 1 : 0, 'retry não deixa novo resíduo');
+  } finally { restored?.close(); db.close(); rmSync(folder, { recursive: true, force: true }); }
 });

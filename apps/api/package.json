@@ -6,7 +6,7 @@
     "seed": "node --import tsx src/seed.ts", "import:history": "node --import tsx src/import-history.ts"
   },
   "dependencies": {
-    "@caixa/shared": "*", "better-sqlite3": "^12.0.0", "express": "^5.1.0", "zod": "^4.0.0"
+    "@caixa/shared": "*", "better-sqlite3": "13.0.3", "express": "^5.1.0", "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13", "@types/express": "^5.0.0",

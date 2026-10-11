@@ -18,6 +18,8 @@
 | Horário de registro com origem explícita | Mostrar o instante conhecido sem atribuir a vendas antigas o horário da importação. | Se a origem passar a registrar o instante real da venda. |
 | Uma feira ativa, arquivos históricos imutáveis | Separar eventos futuros, metas e fechamentos, sem perder o estoque compartilhado. | Se forem necessários dois eventos simultâneos ou retificação auditável. |
 | Porta desktop fixa | Preservar a origem do armazenamento de rascunhos e UUIDs entre aberturas. | Ao mover rascunhos para persistência independente da origem web. |
+| Flatpak privado com runtime GNOME e Node empacotado | Usar o mesmo aplicativo Linux x86_64 no PC e no notebook, sem depender do Node, Rust ou WebKit instalados no host. O banco permanece fora do pacote. | Se outra arquitetura ou sistema operacional passar a ser necessário. |
+| SQLite nativo com Node-API, fixado em 13.0.3 | Evitar o abort reproduzido na coleta de wrappers do addon anterior com Node 24.21.0; compilar no SDK e carregar somente esse binário. | Ao atualizar Node ou o addon, repetindo a regressão e o teste do pacote instalado. |
 
 ## Evidência obtida durante a construção
 
@@ -52,6 +54,18 @@ Um corpo enviado sem confirmação fica persistido e congelado antes do POST. So
 A recuperação reutiliza o corpo e a chave originais mesmo após mudança do catálogo, da data selecionada ou fechamento do dia/feira. A API resolve o retry por ID/hash antes de validar o estado atual; pedidos ainda inexistentes continuam sujeitos aos bloqueios. Testes de navegador gravam de fato no SQLite e só então abortam a resposta, desafiando a duplicação e as baixas de estoque.
 
 As melhorias opcionais identificadas foram agrupar itens por pedido em uma passagem e acrescentar um atalho “Hoje”/aviso de data. Não houve lentidão observada no volume atual, e a data selecionável é necessária para consulta. Esses pontos ficaram para uma necessidade concreta; não houve mudança de arquitetura, dependências ou otimização ampla.
+
+## Empacotamento de 11/10/2026
+
+O Flatpak foi construído e instalado na conta do PC. O build passou em 78 testes de regras/API, quatro de seleção de fontes e cinco de Rust. Duas comparações com JSONs da planilha foram puladas porque o pacote exclui os dados privados.
+
+O primeiro teste do pacote reproduziu um abort nativo com `better-sqlite3 12.11.1` e Node 24.21.0. A reprodução independente abriu e fechou bancos em memória sob alocações JavaScript, sem restauração nem injeção de falha. O addon 13.0.3 usa Node-API e passou nos 10 mil ciclos; a regressão entrou no build e no diagnóstico do pacote instalado. O manifesto força a compilação no SDK e remove os prebuilds para que o loader use o binário verificado.
+
+O teste final dentro da sandbox confirmou rede privada IPv4/IPv6, addon compilado realmente carregado, frontend servido, venda/reenvio sem duplicação, estoque, CSV, backup/restauração e encerramento efetivo por SIGTERM. A restauração publica um arquivo completo sem sobrescrever destino existente: testes cobrem erro de cópia, interrupção abrupta, links simbólicos quebrados e falha de sincronização após a publicação.
+
+Uma verificação sem janela do portal de documentos confirmou criação, substituição por arquivo temporário e recusa de escrita com permissão somente leitura, conferindo os bytes no host. Isso prova a fronteira de arquivos, mas não o diálogo gráfico Tauri. A janela, o fluxo visual de exportação e o notebook Zorin permanecem sujeitos à conferência manual descrita em [Flatpak privado](12-flatpak.md).
+
+A cópia inicial para a pasta privada do Flatpak conservou o esquema e os 86 registros das oito tabelas do banco da transferência. Integridade e referências foram conferidas; os hashes do banco original e do ODS permaneceram iguais. A cópia privada e o banco do projeto passam a ser arquivos independentes, sem sincronização.
 
 ## Antes da troca definitiva
 
