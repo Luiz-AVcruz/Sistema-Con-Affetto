@@ -24,7 +24,8 @@
     "nightly:install": "node scripts/nightly-install.mjs",
     "flatpak:build": "node scripts/flatpak-build.mjs",
     "flatpak:test": "node scripts/flatpak-runtime-smoke.mjs",
-    "test:packaging": "node --test tests/packaging/*.test.mjs"
+    "test:packaging": "node --test tests/packaging/*.test.mjs",
+    "test:rust": "npm run build -w @caixa/shared && node scripts/test-rust-core.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

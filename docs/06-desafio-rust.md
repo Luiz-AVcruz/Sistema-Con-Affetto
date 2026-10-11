@@ -1,5 +1,7 @@
 # Desafio: reconstruir o backend em Rust
 
+Este roteiro foi escrito quando o Rust era um exercício de estudo. A migração para uso operacional começou em 11/10/2026 pelo núcleo financeiro. Consulte [Migração incremental para Rust](15-migracao-rust.md) para o estado atual e a sequência de adoção. O restante deste documento permanece como material de estudo.
+
 ## Objetivo
 
 Implementar um backend Rust que atenda à interface Angular e preserve as regras do caixa. A primeira versão em Node oferece comportamento observável, testes e exemplos. O desafio não é traduzir instruções linha por linha; é representar essas responsabilidades na outra linguagem e provar os resultados.
@@ -35,8 +37,8 @@ Depois de o Rust cumprir o contrato, altere apenas o destino do proxy ou a confi
 `apps/api/test/api.test.ts` pode conectar a uma API externa de teste por `CAIXA_TEST_URL`. Ele envia HTTP real e usa dados fictícios próprios. A porta 3333 é recusada para reduzir o risco de usar o caixa principal. A API de teste deve usar um banco vazio e descartável.
 
 ```bash
-# Depois de iniciar o seu backend Rust de estudo na porta 3335:
-CAIXA_TEST_URL=http://127.0.0.1:3335 node --import tsx --test apps/api/test/api.test.ts
+# Depois de iniciar o seu backend Rust de estudo em uma porta de teste livre:
+CAIXA_TEST_URL=http://127.0.0.1:3437 node --import tsx --test apps/api/test/api.test.ts
 ```
 
 Esse teste cobre parte do contrato, não todas as regras. Os cenários de `register.test.ts` precisam ser implementados em testes Rust ou ampliados pela fronteira HTTP. O teste do navegador também precisa iniciar o servidor Rust com um banco temporário; ajuste esse mecanismo somente depois de concluir as regras.

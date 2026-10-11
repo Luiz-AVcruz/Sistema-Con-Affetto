@@ -17,6 +17,7 @@ Leia nesta ordem:
 11. [Flatpak privado](12-flatpak.md): pacote Linux pronto, compilação no SDK e transferência separada do banco.
 12. [Nightly local](13-nightly.md): atalho que abre os fontes atuais, banco separado e passagem para o Flatpak.
 13. [Pagamentos e retificações](14-pagamentos.md): taxas desta feira, bruto/líquido por participante e correção auditável dos cartões anteriores.
+14. [Migração incremental para Rust](15-migracao-rust.md): núcleo financeiro implementado, comparação com Node e critérios para substituir o backend em etapas.
 
 Depois de mudar um comportamento, atualize a regra correspondente e o teste que a demonstra. Registre decisões específicas em [Decisões e pendências](07-decisoes.md), com o motivo e a condição que justificaria revisá-las.
 

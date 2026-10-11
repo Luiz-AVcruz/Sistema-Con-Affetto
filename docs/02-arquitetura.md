@@ -8,6 +8,7 @@ O projeto usa npm workspaces para manter três pacotes relacionados no mesmo rep
 apps/web/          interface Angular
 apps/api/          servidor Node e regras de aplicação
 packages/shared/  tipos e nomes de pagamento compartilhados
+packages/caixa-core/ núcleo financeiro Rust em validação, sem acesso ao banco
 scripts/          extração, recuperação e infraestrutura de teste
 docs/             explicação e exercícios
 data/             banco e referências privadas, fora do Git
@@ -49,5 +50,7 @@ O carrinho é um rascunho no `localStorage`, associado a uma data e a uma chave 
 Não foram adicionados contêineres, filas, microsserviços ou ORM. A fronteira HTTP já permite trocar o backend por Rust sem reescrever a interface. Os tipos TypeScript ajudam esta implementação, mas o contrato em JSON é a fronteira que a outra linguagem terá de respeitar.
 
 As consultas de leitura percorrem o histórico completo, adequado ao protótipo. Se medições mostrarem lentidão com o volume real, a evolução é paginar histórico e agregar pelo SQL. A troca deve preservar os mesmos resultados; não há justificativa para fazê-la apenas por preferência arquitetural.
+
+A migração para Rust começou pelo núcleo financeiro de `packages/caixa-core`, que também oferece um executável para comparação por JSON. A aplicação de uso continua chamando Node; não há duas implementações gravando no mesmo banco. A biblioteca não depende de HTTP, SQLite ou Tauri e poderá ser usada diretamente pelo desktop. Estado, comandos de verificação e critérios de passagem estão em [Migração incremental para Rust](15-migracao-rust.md).
 
 Fontes técnicas: [compatibilidade do Angular](https://angular.dev/reference/versions), [signals](https://angular.dev/guide/signals), [formulários reativos](https://angular.dev/guide/forms/reactive-forms), [versões do Node](https://nodejs.org/en/about/previous-releases) e [API do better-sqlite3](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md).

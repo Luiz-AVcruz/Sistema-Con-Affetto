@@ -92,6 +92,8 @@ npm run test:e2e
 
 `test:e2e` abre um navegador automatizado e percorre o atendimento em um banco temporário. Neste notebook usa o Brave existente. Em outro ambiente, configure `BROWSER_PATH` ou instale o Chromium do Playwright com `npx playwright install chromium`.
 
+O início da migração para Rust está em `packages/caixa-core`. `npm run test:rust` verifica formatação, testes Rust e equivalência dos cálculos com Node usando o executável real. Exige Rust/Cargo 1.90 ou posterior; em outro computador, as dependências do `Cargo.lock` precisam estar disponíveis no cache antes da execução offline. O aplicativo de uso continua no backend Node nesta etapa. Consulte [migração incremental](docs/15-migracao-rust.md).
+
 ## Dados e recuperação
 
 O modo web usa `data/caixa.sqlite` por padrão; a Nightly usa o banco escolhido

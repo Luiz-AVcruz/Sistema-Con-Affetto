@@ -1,0 +1,15 @@
+[package]
+name = "caixa-core"
+version = "0.1.0"
+description = "Regras financeiras do caixa da Con Affetto, sem interface ou persistência"
+edition = "2021"
+rust-version = "1.90"
+license = "AGPL-3.0-only"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[[bin]]
+name = "caixa-core"
+path = "src/main.rs"
