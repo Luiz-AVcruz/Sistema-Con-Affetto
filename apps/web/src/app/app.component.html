@@ -4,11 +4,11 @@
 </div></header>
 <main>
   <p class="validation-note">Versão em validação. Os novos pedidos não atualizam a planilha.</p>
-  <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="view.set(item)" [disabled]="store.saving()">{{ item }}</button> }</nav>
+  <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="openView(item)" [disabled]="store.saving()">{{ item }}</button> }</nav>
   @if (store.error()) { <div class="alert" role="alert">{{ store.error() }}<button type="button" class="text-button" (click)="store.error.set('')" aria-label="Fechar aviso">Fechar aviso</button></div> }
   @if (store.notice()) { <p class="notice" role="status">{{ store.notice() }}</p> }
   @if (store.loading()) { <p role="status" class="muted">Atualizando dados do caixa...</p> }
   @if (store.data()) {
-    @switch (view()) { @case ('Vender') { <app-sales /> } @case ('Produtos') { <app-products /> } @case ('Fechamento') { <app-closing /> } @case ('Histórico') { <app-history /> } @case ('Feiras') { <app-fairs /> } }
+    @switch (view()) { @case ('Vender') { <app-sales /> } @case ('Produtos') { <app-products /> } @case ('Fechamento') { <app-closing /> } @case ('Sumário') { <app-summary (showHistory)="showDayHistory($event)" /> } @case ('Histórico') { <app-history [consultedDate]="historyDate()" (clearConsultedDate)="historyDay.set(null)" /> } @case ('Feiras') { <app-fairs /> } }
   } @else if (!store.loading()) { <section class="panel"><h2>Não foi possível carregar o caixa</h2><button class="primary" (click)="store.refresh()">Tentar novamente</button></section> }
 </main>

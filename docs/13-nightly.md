@@ -57,6 +57,46 @@ alteram vendas, totais, CSVs ou o banco SQLite e não integram seu backup.
 Esta atualização é aplicada ao código local; o Flatpak instalado conserva
 sua versão anterior até uma nova compilação e instalação explícitas.
 
+## Sumário dos dias fechados
+
+A seção **Sumário** lista os dias fechados da feira selecionada, do mais recente
+para o mais antigo. Cada linha mostra bruto recebido, taxas, líquido e o resultado
+da conferência de dinheiro. **Ver resumo** abre os valores daquele dia por
+participante e forma de pagamento, descontos, pendências, permutas/brindes,
+conferência e observação guardadas. Para ver dias de uma feira anterior, selecione
+essa feira no topo do aplicativo.
+
+**Produtos vendidos neste dia** mostra unidades, bruto recebido, taxas e líquido
+por produto e participante, da maior quantidade para a menor. **Comparação dos
+produtos entre dias** coloca unidades e líquido lado a lado para cada dia fechado,
+com totais por produto. **Comparação dos participantes entre dias** permite
+comparar o líquido de cada participante em todos esses dias.
+
+As vendas pagas entram no dia do recebimento, como no fechamento. Pagamentos
+divididos contam os itens uma única vez. Pedidos cancelados ou ainda pendentes,
+permutas e brindes não contam como produtos vendidos; as duas últimas categorias
+continuam separadas no resumo do dia. Produtos sem vendas pagas nos dias fechados
+não aparecem nas tabelas. São usados nome, participante e valores históricos
+dos itens; mudar preço ou participante no cadastro não reatribui vendas antigas.
+O bruto recebido já considera descontos; o líquido desconta taxas de pagamento.
+Custos de produção não são registrados, portanto líquido não é lucro.
+
+O resumo usa o registro guardado no fechamento. Uma taxa retificada depois do
+fechamento aparece nos valores ajustados, com indicação do líquido original e
+da diferença acrescentada; o registro original continua preservado. Pendências
+mostram a situação no fechamento, mesmo quando recebidas posteriormente.
+
+**Ver pedidos deste dia** abre o Histórico filtrado por pedidos ou recebimentos
+naquela data. Essa consulta não altera a data de trabalho nem o dia de lançamento
+de uma venda. **Usar data de trabalho** remove a consulta específica e salva a
+preferência de mostrar somente esse dia. Abrir o Histórico pelo menu sem escolher
+essa opção recupera seu filtro habitual e suas preferências salvas.
+
+**Exportar dias desta feira** usa o CSV de fechamentos existente, limitado à feira
+consultada. O arquivo inclui todos os dias registrados, inclusive dias ainda
+abertos. A página Sumário mostra somente fechamentos guardados. A conferência
+e as vendas continuam sendo feitas nas seções Fechamento e Vender.
+
 ## Meta e pagamentos desta feira
 
 A meta considera somente o líquido da **Con Affetto**. No Fechamento e no

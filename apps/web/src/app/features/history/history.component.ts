@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { paymentChoices, paymentChoiceValue, paymentLabel, type Sale } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
@@ -20,6 +20,9 @@ export class HistoryComponent {
   readonly money = formatMoney;
   readonly dayLabel = formatDay;
   readonly registeredLabel = formatRegisteredAt;
+  readonly consultedDate = input<string | null>(null);
+  readonly clearConsultedDate = output<void>();
+  readonly historyDate = computed(() => this.consultedDate() ?? this.store.date());
   private readonly preferences = this.loadPreferences();
   readonly allDates = signal(this.preferences.allDates);
   readonly order = signal(this.preferences.order);
@@ -36,7 +39,7 @@ export class HistoryComponent {
     return dates;
   });
   readonly sales = computed(() => {
-    const sales = (this.store.data()?.sales ?? []).filter(sale => this.allDates() || sale.date === this.store.date() || sale.paymentDate === this.store.date());
+    const sales = (this.store.data()?.sales ?? []).filter(sale => this.allDates() || sale.date === this.historyDate() || sale.paymentDate === this.historyDate());
     const byDate = (a: Sale, b: Sale) => a.date.localeCompare(b.date)
       || (a.origin === 'Planilha' ? '' : a.createdAt).localeCompare(b.origin === 'Planilha' ? '' : b.createdAt);
     switch (this.order()) {
@@ -47,6 +50,7 @@ export class HistoryComponent {
     }
   });
   constructor() {
+    effect(() => { this.allDates.set(this.consultedDate() ? false : this.preferences.allDates); });
     effect(() => {
       const confirmation = this.deleteConfirmation();
       const selectedFairId = this.store.data()?.fair.id ?? this.store.selectedFairId();
@@ -66,11 +70,12 @@ export class HistoryComponent {
     } catch { return defaults; }
   }
   private savePreferences(): void {
-    try { localStorage.setItem(preferencesKey, JSON.stringify({ allDates: this.allDates(), order: this.order() })); }
+    try { localStorage.setItem(preferencesKey, JSON.stringify(this.preferences)); }
     catch { /* Preferências opcionais: a consulta continua funcionando nesta sessão. */ }
   }
-  setAllDates(value: boolean): void { this.allDates.set(value); this.savePreferences(); }
-  setOrder(value: HistoryOrder): void { this.order.set(value); this.savePreferences(); }
+  setAllDates(value: boolean): void { this.allDates.set(value); this.preferences.allDates = value; this.savePreferences(); }
+  setOrder(value: HistoryOrder): void { this.order.set(value); this.preferences.order = value; this.savePreferences(); }
+  useWorkDate(): void { this.setAllDates(false); this.clearConsultedDate.emit(); }
   async cancel(sale: Sale): Promise<void> {
     if (confirm(`Cancelar o pedido de ${formatMoney(sale.totalCents)}? Se estava pago, a quantidade será devolvida ao estoque. Confirme que os produtos realmente voltaram.`)) await this.store.cancel(sale.id);
   }

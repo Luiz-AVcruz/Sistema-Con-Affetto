@@ -1,15 +1,10 @@
 @if (store.data(); as data) {
-  @let summary = data.day.adjustedSummary ?? data.day.summary;
   <div class="two-columns">
     <section class="panel">
       <div class="section-heading"><h2>Fechamento do dia</h2><span>{{ dayLabel(data.day.date) }}</span></div>
       @if (data.fair.closedAt) { <p class="alert">A feira foi encerrada. Este fechamento fica disponível somente para consulta.</p> }
       <p class="status-line">{{ data.day.closedAt ? (data.day.countedCents === null ? 'Fechado sem contagem' : 'Fechado') : 'Dia aberto' }}</p>
-      <div class="table-wrap"><table><thead><tr><th>Participante</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th></tr></thead><tbody>@for (owner of summary.byOwner; track owner.ownerId) { <tr><td>{{ owner.name }}</td><td class="number">{{ money(owner.receivedCents) }}</td><td class="number">{{ money(owner.feeCents) }}</td><td class="number">{{ money(owner.netCents) }}</td></tr> }</tbody><tfoot><tr><th>Total do dia</th><th class="number">{{ money(summary.receivedCents) }}</th><th class="number">{{ money(summary.feeCents) }}</th><th class="number" data-testid="day-net">{{ money(summary.netCents) }}</th></tr></tfoot></table></div>
-      <h3>Pagamentos recebidos no dia</h3>
-      <dl class="totals">@for (payment of summary.byPayment; track payment.method) { <div><dt>{{ payment.method }}</dt><dd>{{ money(payment.totalCents) }}</dd></div> }<div><dt>Total recebido</dt><dd>{{ money(summary.receivedCents) }}</dd></div><div><dt>Descontos</dt><dd>{{ money(summary.discountCents) }}</dd></div><div><dt>Taxas</dt><dd>{{ money(summary.feeCents) }}</dd></div><div><dt>Pendências deste dia</dt><dd>{{ money(summary.pendingCents) }}</dd></div><div><dt>Permutas / brindes</dt><dd>{{ summary.barterUnits }} / {{ summary.giftUnits }} unidades</dd></div></dl>
-      @if (data.day.adjustedSummary) { <p class="alert">Retificação posterior: líquido no fechamento original {{ money(data.day.summary.netCents) }}; taxas acrescentadas {{ money(data.day.feeCorrectionCents ?? 0) }}; líquido ajustado {{ money(summary.netCents) }}. O fechamento original e a conferência de dinheiro foram preservados.</p> }
-      @if (data.day.closedAt) { <p class="muted">Este resumo é o registro guardado no fechamento. Pendências podem ser recebidas em outro dia aberto.</p> }
+      <app-day-summary [day]="data.day" />
     </section>
     <section class="panel">
       <h2>Conferência de dinheiro</h2><p class="muted">Contar o dinheiro é opcional. Deixe o valor contado vazio para fechar sem contagem.</p>
@@ -21,7 +16,7 @@
       @if (preview(); as values) { <dl class="totals"><div><dt>Dinheiro esperado</dt><dd>{{ money(values.expected) }}</dd></div><div><dt>Diferença</dt><dd [class.danger-text]="values.difference !== null && values.difference !== 0">{{ values.difference === null ? 'Sem contagem' : money(values.difference) }}</dd></div></dl> } @else { <p class="alert">Confira os valores da contagem.</p> }
       <div class="button-row"><button type="submit" class="secondary" [disabled]="!!data.fair.closedAt || !!data.day.closedAt || store.busy() || !preview()">Salvar conferência</button><button type="button" class="primary" (click)="save(true)" [disabled]="!!data.fair.closedAt || !!data.day.closedAt || store.busy() || !preview()">Fechar dia</button></div>
       </form>
-      <h3>Fechamentos guardados</h3><ul class="closing-list">@for (day of data.closedDays; track day.date) { <li><button type="button" class="text-button" (click)="store.changeDate(day.date)" [disabled]="store.busy()">{{ dayLabel(day.date) }}</button><span>{{ money(day.summary.netCents) }} · {{ day.countedCents === null ? 'Sem contagem' : 'Com contagem' }}</span></li> } @empty { <li>Nenhum dia fechado.</li> }</ul>
+      <h3>Fechamentos guardados</h3><ul class="closing-list">@for (day of data.closedDays; track day.date) { <li><button type="button" class="text-button" (click)="store.changeDate(day.date)" [disabled]="store.busy()">{{ dayLabel(day.date) }}</button><span>{{ money((day.adjustedSummary ?? day.summary).netCents) }}{{ day.adjustedSummary ? ' · Retificado' : '' }} · {{ day.countedCents === null ? 'Sem contagem' : 'Com contagem' }}</span></li> } @empty { <li>Nenhum dia fechado.</li> }</ul>
     </section>
   </div>
   <section class="panel spaced"><div class="section-heading"><h2>Total da feira</h2><span>Acumulado de todos os dias</span></div><div class="summary-grid">@for (owner of data.total.byOwner; track owner.ownerId) { <div><span>{{ owner.name }}</span><strong>Líquido {{ money(owner.netCents) }}</strong><small>Bruto {{ money(owner.receivedCents) }} · Taxas {{ money(owner.feeCents) }}</small></div> }<div><span>Total líquido da feira</span><strong data-testid="fair-net">{{ money(data.total.netCents) }}</strong><small>Bruto {{ money(data.total.receivedCents) }} · Taxas {{ money(data.total.feeCents) }}</small></div></div></section>

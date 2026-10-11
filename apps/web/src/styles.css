@@ -93,6 +93,10 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .fair-close-row p { margin-bottom: 10px; }
 .status-line { color: #164e63; font-size: .9rem; }
 .history-order { border-top: 1px solid #e5e7eb; padding: 22px 0; }
+.closed-day-selected { background: #edf6f8; }
+.closing-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cash-summary { margin-top: 24px; }
+.cash-summary > summary { font-size: 1rem; font-weight: 600; }
 .history-filters { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px 24px; margin-bottom: 14px; }
 .history-filters label { margin-bottom: 0; }
 .history-filters > label:not(.checkbox-label) { width: min(260px, 100%); }

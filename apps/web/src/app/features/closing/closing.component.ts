@@ -2,8 +2,9 @@ import { Component, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, moneyInput, parseMoney } from '../../core/money';
+import { DaySummaryComponent } from './day-summary.component';
 
-@Component({ selector: 'app-closing', standalone: true, imports: [FormsModule], templateUrl: './closing.component.html' })
+@Component({ selector: 'app-closing', standalone: true, imports: [FormsModule, DaySummaryComponent], templateUrl: './closing.component.html' })
 export class ClosingComponent {
   readonly store = inject(CashStore);
   readonly money = formatMoney;

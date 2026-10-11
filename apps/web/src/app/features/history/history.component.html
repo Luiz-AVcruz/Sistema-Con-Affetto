@@ -4,7 +4,8 @@
     <label class="checkbox-label"><input type="checkbox" [ngModel]="allDates()" (ngModelChange)="setAllDates($event)">Mostrar todos os dias</label>
     <label>Ordenar pedidos<select [ngModel]="order()" (ngModelChange)="setOrder($event)">@for (option of orderOptions; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
   </div>
-  <p class="muted">{{ allDates() ? 'Exibe o histórico completo.' : 'Exibe os pedidos e recebimentos da data selecionada.' }} Receber uma pendência registra o pagamento em {{ dayLabel(store.date()) }}.</p>
+  <p class="muted">{{ allDates() ? 'Exibe o histórico completo.' : 'Exibe os pedidos e recebimentos de ' + dayLabel(historyDate()) + '.' }} Receber uma pendência registra o pagamento em {{ dayLabel(store.date()) }}.</p>
+  @if (consultedDate()) { <div class="section-heading"><p class="muted">Consulta do dia {{ dayLabel(consultedDate()!) }}. A data de trabalho continua em {{ dayLabel(store.date()) }}.</p><button type="button" class="secondary" (click)="useWorkDate()">Usar data de trabalho</button></div> }
   @for (sale of sales(); track sale.id) {
     <article class="history-order" [class.cancelled]="sale.status === 'Cancelado'">
       <div class="section-heading"><div><strong>{{ money(sale.totalCents) }}</strong><span class="tag">{{ sale.status }}</span>@if (sale.payments?.length) { <span>2 formas de pagamento</span> } @else { <span>{{ paymentLabel(sale.paymentMethod, sale.cardEntry) }}</span> }</div><div class="order-date"><span>Pedido de {{ dayLabel(sale.date) }}{{ sale.paymentDate && sale.paymentDate !== sale.date ? ' · Recebido em ' + dayLabel(sale.paymentDate) : '' }}</span><small class="order-time">{{ sale.origin === 'Planilha' ? 'Horário não registrado na planilha' : 'Registrado em ' + registeredLabel(sale.createdAt) }}</small></div></div>
