@@ -6,7 +6,7 @@ export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVe
   db.pragma('foreign_keys = OFF');
   try {
     db.transaction(() => {
-      db.exec(`ALTER TABLE sales DROP COLUMN deleted_at;
+      db.exec(`DROP TABLE workspace; ALTER TABLE sales DROP COLUMN deleted_at;
         DROP TABLE spreadsheet_records;
         CREATE TABLE days_old(date TEXT PRIMARY KEY,opening_cents INTEGER NOT NULL,extra_cents INTEGER NOT NULL,
           withdrawal_cents INTEGER NOT NULL,counted_cents INTEGER,note TEXT NOT NULL,closed_at TEXT,snapshot TEXT);

@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import type { Bootstrap, SaleInput, ProductInput, CashInput, PaymentMethod, Fair, FairInput } from '@caixa/shared';
 import { localDate } from './money';
+import { workspaceGeneration } from './workspace-generation';
 
 @Injectable({ providedIn: 'root' })
 export class CashStore {
@@ -13,7 +14,9 @@ export class CashStore {
   readonly selectedFairId = signal<number | null>(null);
   readonly loading = signal(false);
   readonly saving = signal(false);
-  readonly busy = computed(() => this.loading() || this.saving());
+  readonly fileBusy = signal(false);
+  readonly workspaceBlocked = signal(true);
+  readonly busy = computed(() => this.loading() || this.saving() || this.fileBusy() || this.workspaceBlocked());
   readonly error = signal('');
   readonly notice = signal('');
 
@@ -26,11 +29,23 @@ export class CashStore {
     try {
       const params: Record<string, string> = { date };
       if (fairId !== null) params['fairId'] = String(fairId);
-      const data = await firstValueFrom(this.http.get<Bootstrap>('/api/bootstrap', { params }));
-      if (sequence === this.requestSequence) { this.selectedFairId.set(data.fair.id); this.data.set(data); }
+      const data = await firstValueFrom(this.http.get<Bootstrap & { generation: string | null }>('/api/bootstrap', { params }));
+      if (sequence === this.requestSequence) {
+        if (data.generation !== workspaceGeneration()) {
+          this.blockWorkspace();
+          this.error.set('Os dados foram substituídos. Carregue o arquivo atual antes de continuar.');
+          return;
+        }
+        this.selectedFairId.set(data.fair.id); this.data.set(data);
+      }
     } catch (error) {
       if (sequence === this.requestSequence) this.report(error);
     } finally { if (sequence === this.requestSequence) this.loading.set(false); }
+  }
+
+  blockWorkspace(): void {
+    ++this.requestSequence;
+    this.data.set(null); this.loading.set(false); this.workspaceBlocked.set(true);
   }
 
   async changeDate(date: string): Promise<void> {
@@ -50,6 +65,7 @@ export class CashStore {
 
   report(error: unknown): void {
     if (error instanceof HttpErrorResponse) {
+      if (error.error?.workspaceChanged) this.blockWorkspace();
       this.error.set(error.error?.error ?? 'Não foi possível confirmar a operação. Confira o histórico e tente novamente com o mesmo pedido.');
     } else this.error.set(error instanceof Error ? error.message : 'Não foi possível concluir a operação.');
   }

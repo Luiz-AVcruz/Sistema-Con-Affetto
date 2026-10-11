@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const schemaVersion = 5;
+export const schemaVersion = 6;
 
 export function openDatabase(path: string): Database.Database {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -109,6 +109,12 @@ export function openDatabase(path: string): Database.Database {
       // O marcador mantém a chave de reenvio e os vínculos da importação.
       // Nenhum pedido existente é excluído durante a migração.
       db.exec('ALTER TABLE sales ADD COLUMN deleted_at TEXT; PRAGMA user_version = 5;');
+    }).immediate();
+    if (version < 6) db.transaction(() => {
+      db.exec(`CREATE TABLE workspace (
+        id INTEGER PRIMARY KEY CHECK(id=1), generation TEXT NOT NULL,
+        saved_at TEXT NOT NULL, state TEXT NOT NULL, import_id TEXT, backup_path TEXT
+      ); PRAGMA user_version = 6;`);
     }).immediate();
     return db;
   } catch (error) { db.close(); throw error; }

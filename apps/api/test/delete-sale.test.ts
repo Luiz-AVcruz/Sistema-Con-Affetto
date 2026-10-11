@@ -142,7 +142,7 @@ test('migração v4 acrescenta somente marcador vazio e preserva todas as tabela
     data.register.closeDay(date, cash);
     db.prepare('INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,source_sha256,imported_at,fair_id) VALUES(?,?,?,?,?,?,1)')
       .run('caixa-da-feira-ods', 'Vendas:6', 'hash original', sale.id, 'origem', new Date().toISOString());
-    db.exec('ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
+    db.exec('DROP TABLE workspace; ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
     const before = rows(db);
     db.close(); db = openDatabase(path);
     assert.equal(db.pragma('user_version', { simple: true }), schemaVersion);

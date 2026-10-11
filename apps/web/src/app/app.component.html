@@ -1,14 +1,19 @@
 <header class="app-header"><div><p class="eyebrow">Aplicativo local</p><h1>Caixa da feira</h1></div><div class="header-context">
-  @if (store.data(); as data) { <label class="fair-field">Feira<select [ngModel]="data.fair.id" (ngModelChange)="store.selectFair($event)" [disabled]="store.busy()">@for (fair of data.fairs; track fair.id) { <option [ngValue]="fair.id">{{ fair.name }} · {{ fair.closedAt ? 'Encerrada' : 'Ativa' }}</option> }</select></label> }
-  <label class="date-field">Data de trabalho<input type="date" [ngModel]="store.date()" (ngModelChange)="store.changeDate($event)" [disabled]="store.busy()" min="2020-01-01" max="2100-12-31"></label>
+  @if (store.data(); as data) { <label class="fair-field">Feira<select [ngModel]="data.fair.id" (ngModelChange)="store.selectFair($event)" [disabled]="store.busy() || !!workspace.candidate()">@for (fair of data.fairs; track fair.id) { <option [ngValue]="fair.id">{{ fair.name }} · {{ fair.closedAt ? 'Encerrada' : 'Ativa' }}</option> }</select></label> }
+  <label class="date-field">Data de trabalho<input type="date" [ngModel]="store.date()" (ngModelChange)="store.changeDate($event)" [disabled]="store.busy() || !!workspace.candidate()" min="2020-01-01" max="2100-12-31"></label>
 </div></header>
 <main>
   <p class="validation-note">Versão em validação. Os novos pedidos não atualizam a planilha.</p>
-  <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="view.set(item)" [disabled]="store.saving()">{{ item }}</button> }</nav>
+  <div class="workspace-actions"><button type="button" class="secondary" (click)="saveFile()" [disabled]="store.busy() || !!workspace.candidate()">Salvar arquivo completo…</button><button type="button" class="secondary" (click)="filePicker.click()" [disabled]="store.busy() || !!workspace.candidate()">Importar arquivo completo…</button><input #filePicker type="file" accept=".caixa" hidden (change)="selectFile($event)"><small>Um arquivo .caixa guarda todas as feiras, vendas, estoque e rascunhos, com a data e a tela selecionadas.</small></div>
+  <nav aria-label="Seções do caixa">@for (item of views; track item) { <button type="button" [class.active]="view() === item" (click)="view.set(item)" [disabled]="store.busy() || !!workspace.candidate()">{{ item }}</button> }</nav>
   @if (store.error()) { <div class="alert" role="alert">{{ store.error() }}<button type="button" class="text-button" (click)="store.error.set('')" aria-label="Fechar aviso">Fechar aviso</button></div> }
   @if (store.notice()) { <p class="notice" role="status">{{ store.notice() }}</p> }
   @if (store.loading()) { <p role="status" class="muted">Atualizando dados do caixa...</p> }
-  @if (store.data()) {
+  @if (workspace.candidate(); as candidate) { <section class="panel import-confirmation" role="dialog" aria-label="Confirmar importação"><h2>Substituir este caixa pelo arquivo selecionado?</h2><p>O arquivo contém {{ candidate.summary.fairs }} feira(s), {{ candidate.summary.products }} produto(s), {{ candidate.summary.sales }} pedido(s) e {{ candidate.summary.drafts }} rascunho(s). Foi salvo em {{ candidate.summary.savedAt }}.</p><p>Os dados atuais serão substituídos. Uma cópia completa do estado atual será guardada na pasta de backups do aplicativo antes da importação.</p><div class="button-row"><button type="button" class="primary" (click)="importFile()" [disabled]="store.fileBusy()">Substituir e importar</button><button type="button" class="secondary" (click)="workspace.cancelImport()" [disabled]="store.fileBusy()">Cancelar importação</button></div></section> }
+  @if (store.workspaceBlocked() && !store.fileBusy()) { <section class="panel"><h2>Carregar o estado do arquivo</h2><p>O caixa fica bloqueado até os dados e rascunhos corresponderem ao mesmo arquivo.</p><button type="button" class="primary" (click)="workspace.recovery() ? workspace.recoverImport() : workspace.initialize()">Recuperar estado do caixa</button></section> }
+  <div [attr.inert]="workspace.candidate() ? '' : null">
+  @if (store.data() && !store.workspaceBlocked()) {
     @switch (view()) { @case ('Vender') { <app-sales /> } @case ('Produtos') { <app-products /> } @case ('Fechamento') { <app-closing /> } @case ('Histórico') { <app-history /> } @case ('Feiras') { <app-fairs /> } }
-  } @else if (!store.loading()) { <section class="panel"><h2>Não foi possível carregar o caixa</h2><button class="primary" (click)="store.refresh()">Tentar novamente</button></section> }
+  } @else if (!store.loading() && !store.workspaceBlocked()) { <section class="panel"><h2>Não foi possível carregar o caixa</h2><button class="primary" (click)="store.refresh()">Tentar novamente</button></section> }
+  </div>
 </main>

@@ -403,6 +403,7 @@ enum ExportKind {
     Fairs,
     Days,
     Backup,
+    Snapshot,
 }
 
 fn export_kind(url: &Url, expected_port: u16) -> Option<ExportKind> {
@@ -419,6 +420,10 @@ fn export_kind(url: &Url, expected_port: u16) -> Option<ExportKind> {
         "/api/export/fairs.csv" => Some(ExportKind::Fairs),
         "/api/export/days.csv" => Some(ExportKind::Days),
         "/api/backup" => Some(ExportKind::Backup),
+        path if path.starts_with("/api/snapshot/download/")
+            && path.len() == "/api/snapshot/download/".len() + 36
+            && path["/api/snapshot/download/".len()..]
+                .chars().all(|character| character.is_ascii_hexdigit() || character == '-') => Some(ExportKind::Snapshot),
         _ => None,
     }
 }
@@ -430,18 +435,22 @@ impl ExportKind {
             Self::Fairs => "resumo-feiras.csv",
             Self::Days => "fechamentos-feira.csv",
             Self::Backup => "caixa-feira.sqlite",
+            Self::Snapshot => "caixa-da-feira.caixa",
         }
     }
 
     fn title(self) -> &'static str {
         match self {
             Self::Backup => "Salvar backup do caixa",
+            Self::Snapshot => "Salvar arquivo completo do caixa",
             _ => "Exportar dados do caixa",
         }
     }
 
     fn filter(self) -> (&'static str, &'static [&'static str]) {
-        if matches!(self, Self::Backup) {
+        if matches!(self, Self::Snapshot) {
+            ("Arquivo completo do Caixa da Feira", &["caixa"])
+        } else if matches!(self, Self::Backup) {
             ("Banco SQLite", &["sqlite"])
         } else {
             ("Planilha CSV", &["csv"])

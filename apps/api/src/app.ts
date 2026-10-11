@@ -1,9 +1,13 @@
 import express, { type ErrorRequestHandler } from 'express';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { ZodError, z } from 'zod';
 import { CashRegister } from './cash-register.js';
 import { BusinessError, businessDate, cashSchema, fairSchema, newFairSchema, productSchema, productUpdateSchema, receiveSchema, saleSchema } from './validation.js';
+import { parseWorkspaceState } from '@caixa/shared';
+import { captureSnapshot, prepareSnapshot, readWorkspace, restoreSnapshot, snapshotFingerprint } from './snapshot.js';
 
 function csvCell(value: string | number): string {
   const text = String(value);
@@ -14,6 +18,13 @@ function csvCell(value: string | number): string {
 
 export function createApp(register: CashRegister, frontend?: string) {
   const app = express();
+  const prepared = new Map<string, { expires: number; bytes: Buffer }>();
+  const imports = new Map<string, { expires: number; candidate: ReturnType<typeof prepareSnapshot>; fingerprint: string }>();
+  const expire = () => {
+    for (const [token, entry] of prepared) if (entry.expires < Date.now()) prepared.delete(token);
+    for (const [token, entry] of imports) if (entry.expires < Date.now()) { entry.candidate.dispose(); imports.delete(token); }
+  };
+  const generation = () => (register.db.prepare('SELECT generation FROM workspace WHERE id=1').get() as { generation: string } | undefined)?.generation ?? null;
   const context = (fairId: unknown) => new CashRegister(register.db, fairId === undefined ? undefined : z.coerce.number().int().positive().parse(fairId));
   const exportFairs = (fairId: unknown) => fairId === undefined ? register.fairs() : [context(fairId).fair()];
   const reais = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
@@ -27,14 +38,71 @@ export function createApp(register: CashRegister, frontend?: string) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
     if (req.path.startsWith('/api')) res.setHeader('Cache-Control', 'no-store');
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !req.is('application/json')) {
-      res.status(415).json({ error: 'Envie os dados como JSON.' }); return;
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const inspecting = req.method === 'POST' && req.path === '/api/snapshot/inspect';
+      if (!req.is(inspecting ? 'application/octet-stream' : 'application/json')) {
+        res.status(415).json({ error: inspecting ? 'Envie um arquivo .caixa.' : 'Envie os dados como JSON.' }); return;
+      }
     }
     next();
   });
+  app.use('/api/snapshot/inspect', express.raw({ type: 'application/octet-stream', limit: '128mb' }));
+  app.use('/api/snapshot', express.json({ limit: '2mb' }));
   app.use(express.json({ limit: '128kb' }));
+  // O corpo chega de forma assíncrona. Revalidar só depois de lê-lo impede
+  // uma requisição antiga, ainda em trânsito, de escrever após uma importação.
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
+      && req.path !== '/api/snapshot/inspect' && (req.get('X-Caixa-Generation') ?? 'none') !== (generation() ?? 'none')) {
+      res.status(409).json({ error: 'Os dados do caixa foram substituídos. Recarregue o arquivo atual antes de alterar dados.', workspaceChanged: true }); return;
+    }
+    next();
+  });
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '0.1.0' }));
-  app.get('/api/bootstrap', (req, res) => res.json(context(req.query['fairId']).bootstrap(businessDate.parse(req.query['date']))));
+  app.get('/api/bootstrap', (req, res) => res.json({ ...context(req.query['fairId']).bootstrap(businessDate.parse(req.query['date'])), generation: generation() }));
+  app.get('/api/workspace', (_req, res) => res.json({ workspace: readWorkspace(register.db) }));
+  app.post('/api/snapshot/prepare', (req, res) => {
+    expire();
+    if (prepared.size >= 2) throw new BusinessError(409, 'Há arquivos recentes preparados. Aguarde dez minutos antes de preparar outros.');
+    const input = z.object({ state: z.unknown() }).strict().parse(req.body);
+    const snapshot = captureSnapshot(register.db, parseWorkspaceState(input.state));
+    const token = randomUUID();
+    prepared.set(token, { expires: Date.now() + 10 * 60_000, bytes: snapshot.bytes });
+    res.json({ token, workspace: snapshot.workspace });
+  });
+  app.get('/api/snapshot/download/:token', (req, res) => {
+    expire();
+    const entry = prepared.get(z.uuid().parse(req.params['token']));
+    if (!entry) throw new BusinessError(410, 'O arquivo preparado expirou. Use Salvar arquivo completo novamente.');
+    res.setHeader('Content-Disposition', 'attachment; filename="caixa-da-feira.caixa"');
+    res.type('application/octet-stream').send(entry.bytes);
+  });
+  app.post('/api/snapshot/inspect', (req, res) => {
+    expire();
+    if (imports.size >= 2) throw new BusinessError(409, 'Há importações aguardando confirmação. Cancele uma delas ou aguarde dez minutos.');
+    const candidate = prepareSnapshot(req.body);
+    const token = randomUUID(), fingerprint = snapshotFingerprint(register.db);
+    imports.set(token, { expires: Date.now() + 10 * 60_000, candidate, fingerprint });
+    res.json({ token, summary: candidate.summary, fingerprint });
+  });
+  app.delete('/api/snapshot/inspect/:token', (req, res) => {
+    const token = z.uuid().parse(req.params['token']), entry = imports.get(token);
+    if (entry) { entry.candidate.dispose(); imports.delete(token); }
+    res.json({ cancelled: true });
+  });
+  app.post('/api/snapshot/import', (req, res) => {
+    const input = z.object({ token: z.uuid(), operationId: z.uuid(), fingerprint: z.string().length(64), state: z.unknown() }).strict().parse(req.body);
+    const already = readWorkspace(register.db);
+    if (already?.importId === input.operationId) { res.json(already); return; }
+    expire();
+    const entry = imports.get(input.token);
+    if (!entry || entry.fingerprint !== input.fingerprint) throw new BusinessError(410, 'A importação preparada expirou. Escolha o arquivo novamente.');
+    const backupRoot = register.db.name === ':memory:' ? join(tmpdir(), 'caixa-import-backups') : join(dirname(resolve(register.db.name)), 'backups');
+    const workspace = restoreSnapshot(register.db, entry.candidate, parseWorkspaceState(input.state), input.fingerprint, backupRoot, input.operationId);
+    register = new CashRegister(register.db);
+    entry.candidate.dispose(); imports.delete(input.token);
+    res.json(workspace);
+  });
   app.post('/api/fairs', (req, res) => res.status(201).json(context(undefined).createFair(newFairSchema.parse(req.body))));
   app.put('/api/fairs/:id', (req, res) => res.json(context(req.params['id']).saveFair(fairSchema.parse(req.body))));
   app.post('/api/fairs/:id/close', (req, res) => {
@@ -113,9 +181,11 @@ export function createApp(register: CashRegister, frontend?: string) {
     app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: resolve(frontend) }));
   } else app.get('/', (_req, res) => res.type('text').send('API do caixa funcionando. Execute npm run build para abrir a interface ou npm run dev para desenvolver.'));
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (error?.type === 'entity.too.large') { res.status(413).json({ error: 'O arquivo ou estado excede o tamanho permitido.' }); return; }
     if (error instanceof ZodError) { res.status(400).json({ error: 'Confira os campos informados.', details: error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`) }); return; }
     if (error instanceof BusinessError) { res.status(error.status).json({ error: error.message }); return; }
     if (error instanceof SyntaxError) { res.status(400).json({ error: 'JSON inválido.' }); return; }
+    if (error instanceof TypeError && error.message.startsWith('Estado do aplicativo inválido:')) { res.status(400).json({ error: error.message }); return; }
     console.error(error);
     res.status(500).json({ error: 'Não foi possível concluir a operação. Confira o histórico antes de tentar novamente.' });
   };

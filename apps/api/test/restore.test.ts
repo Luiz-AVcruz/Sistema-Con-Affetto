@@ -17,7 +17,7 @@ const rows = (db: Database.Database) => tables.map(table => db.prepare(`SELECT *
 const hash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const restore = (source: string, target: string) => spawnSync(process.execPath, [join(projectRoot, 'scripts/restaurar-backup.mjs'), source, target], { encoding: 'utf8' });
 
-for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
+for (const version of [1, 2, 3, 4, 5, 6] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-'));
   let original: Database.Database | undefined, restored: Database.Database | undefined;
   try {
@@ -33,7 +33,7 @@ for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backu
       register.closeFair('2026-10-10');
       const next=register.createFair({name:'Feira seguinte',targetCents:null,startDate:'2026-10-10'});
       const active=new CashRegister(original,next.id);
-      if (version === 5) {
+      if (version >= 5) {
         const accidental = active.createSale({requestId:randomUUID(),date:'2026-10-10',paymentMethod:'Pix',status:'Pago',note:'Excluído antes do fechamento',
           items:[{productId:product.id,quantity:1,expectedPriceCents:1500,discountCents:0,feeCents:0}]});
         active.deleteSale(accidental.id);
@@ -46,6 +46,7 @@ for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backu
       .run('caixa-da-feira-ods', 'Vendas:6', 'hash da linha original', sale.id, 'sha original', new Date().toISOString());
     if (version < 4) legacyDatabase(original,version);
     if (version === 4) original.exec('ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
+    if (version === 4 || version === 5) original.exec(`DROP TABLE workspace; PRAGMA user_version = ${version}`);
     const expectedRecords = version >= 3 ? original.prepare('SELECT * FROM spreadsheet_records').all() : [];
     const expectedFairs = version >= 4 ? original.prepare('SELECT * FROM fairs').all() : null;
     const expected = rows(original), backup = join(folder, 'backup.sqlite'), target = join(folder, 'restaurado.sqlite');
@@ -66,7 +67,7 @@ for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backu
     const bootstrap = new CashRegister(restored,1).bootstrap('2026-10-10');
     assert.equal(bootstrap.day.summary.netCents, 3000);
     assert.ok(bootstrap.day.closedAt); assert.equal(bootstrap.products[0].stock, version>=4 ? 2 : 3);
-    if (version === 5) {
+    if (version >= 5) {
       const deleted = restored.prepare('SELECT id FROM sales WHERE deleted_at IS NOT NULL').get() as { id: string };
       assert.ok(deleted);
       assert.equal(new CashRegister(restored).sales().some(sale => sale.id === deleted.id),false);

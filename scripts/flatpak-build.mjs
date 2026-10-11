@@ -21,7 +21,7 @@ export function prepareFlatpakSources(root, destination) {
   if (listed.error) throw listed.error;
   if (listed.status !== 0) throw new Error('O build precisa do repositório Git local para selecionar os fontes.');
   const selected = [...new Set(listed.stdout.split('\0').filter(Boolean))].filter(path =>
-    (/^(apps|packages|scripts|packaging)\//.test(path) || path.startsWith('tests/packaging/') || ['package.json', 'package-lock.json'].includes(path))
+    (/^(apps|packages|scripts|packaging)\//.test(path) || path.startsWith('tests/packaging/') || ['package.json', 'package-lock.json', 'LICENSE'].includes(path))
     && !/(?:^|\/)(?:data|node_modules|target|dist|resources|\.git|\.angular)(?:\/|$)/.test(path)
     && !/(?:\.(?:sqlite3?|db)(?:[-.].*)?|\.ods(?:\..*)?|\.env(?:\..*)?|-planilha\.json)$/i.test(path)
   );

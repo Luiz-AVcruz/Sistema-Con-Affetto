@@ -53,3 +53,6 @@ export interface Bootstrap {
   owners: Owner[]; products: Product[]; sales: Sale[]; day: Day;
   total: Summary; closedDays: Day[];
 }
+
+export { parseWorkspaceState, workspaceViews } from './workspace.js';
+export type { WorkspaceView, WorkspaceState, WorkspaceInfo, SnapshotSummary } from './workspace.js';
