@@ -8,6 +8,7 @@
 | `products` | Cadastro atual e estoque disponível. |
 | `sales` | Identificador, chave de reenvio, datas, pagamento, situação, observação e marcador interno de exclusão. |
 | `sale_items` | Quantidades, valores e dados históricos de cada item. |
+| `sale_payments` | Duas partes de pagamento do mesmo pedido: forma, valor, taxa efetiva, leitura e ordem. Ausente em pedidos de pagamento único. |
 | `days` | Conferência de dinheiro e snapshot do fechamento. |
 | `fairs` | Nome, meta, período e snapshot definitivo de cada feira. |
 | `stock_adjustments` | Contagens manuais que alteraram um estoque já cadastrado. |
@@ -50,7 +51,7 @@ As consultas mantêm uma distinção entre data do pedido e data do recebimento.
 
 Imagine um pedido com dois produtos. O primeiro tem estoque; o segundo não tem. Se o código gravar o primeiro item e falhar no segundo, deixa um pedido parcial e um estoque incorreto.
 
-`db.transaction` envolve gravação de pedido, itens e alterações de estoque. A exceção do segundo item desfaz também o primeiro. As atualizações exigem que a quantidade disponível seja suficiente no próprio comando SQL. Essa condição precisa estar no backend, mesmo quando a interface já conferiu a quantidade.
+`db.transaction` envolve gravação de pedido, itens, partes de pagamento e alterações de estoque. A exceção do segundo item desfaz também o primeiro e ambos os pagamentos. As atualizações exigem que a quantidade disponível seja suficiente no próprio comando SQL. Essa condição precisa estar no backend, mesmo quando a interface já conferiu a quantidade.
 
 As transações do better-sqlite3 são síncronas. Não introduza `await` dentro desse callback: a promessa e a transação não têm o mesmo ciclo de vida. Prepare operações assíncronas fora dela; mantenha a decisão e a escrita necessárias à consistência dentro da transação.
 

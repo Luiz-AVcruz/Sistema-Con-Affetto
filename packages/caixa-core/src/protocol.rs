@@ -1,14 +1,22 @@
 //! Fronteira JSON para comparar o núcleo com Node sem HTTP nem banco.
-use crate::finance::{apply_payment_fees, calculate_item, calculate_payment_fees, summarize};
+use crate::finance::{
+    apply_payment_fees, calculate_item, calculate_payment_fees, calculate_split_payment_fees,
+    summarize,
+};
 use crate::model::{
     CardEntry, FinancialSale, Owner, PaymentMethod, Product, SaleItem, SaleItemInput,
+    SalePaymentInput,
 };
 use crate::{BusinessError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
-#[serde(tag = "operation", deny_unknown_fields)]
+#[serde(
+    tag = "operation",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum Command {
     #[serde(rename = "calculatePaymentFees")]
     CalculatePaymentFees {
@@ -17,6 +25,14 @@ pub enum Command {
         method: PaymentMethod,
         #[serde(default)]
         entry: Option<CardEntry>,
+    },
+    #[serde(rename = "calculateSplitPaymentFees")]
+    CalculateSplitPaymentFees {
+        #[serde(deserialize_with = "crate::json_integer::array")]
+        amounts: Vec<i64>,
+        #[serde(deserialize_with = "crate::json_integer::array")]
+        owner_ids: Vec<i64>,
+        payments: Vec<SalePaymentInput>,
     },
     #[serde(rename = "calculateItem")]
     CalculateItem {
@@ -51,6 +67,13 @@ impl Command {
                 method,
                 entry,
             } => json(calculate_payment_fees(&amounts, method, entry)?),
+            Self::CalculateSplitPaymentFees {
+                amounts,
+                owner_ids,
+                payments,
+            } => json(calculate_split_payment_fees(
+                &amounts, &owner_ids, &payments,
+            )?),
             Self::CalculateItem {
                 product,
                 input,

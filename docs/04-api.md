@@ -72,6 +72,28 @@ O retorno contém `id`, `date`, `paymentDate`, `paymentMethod`, `status`, `note`
 
 O UUID deve ser criado uma vez por pedido. Um reenvio com o mesmo conteúdo mantém uma única venda. A primeira versão responde `201` tanto ao registro inicial quanto à confirmação desse reenvio. O cliente usa a identidade e os valores do pedido para reconhecer a confirmação.
 
+### Duas formas de pagamento
+
+Acrescente `automaticFees: true` e `payments` ao mesmo pedido, sem criar outro UUID:
+
+```json
+{
+  "paymentMethod": "Dinheiro",
+  "status": "Pago",
+  "automaticFees": true,
+  "payments": [
+    { "paymentMethod": "Dinheiro", "amountCents": 5000 },
+    { "paymentMethod": "Cartão crédito", "amountCents": 3200, "cardEntry": "Aproximação" }
+  ]
+}
+```
+
+O exemplo é um trecho; os demais campos e itens continuam obrigatórios. São exatamente duas partes positivas cuja soma deve ser igual ao total após descontos. Apenas formas monetárias são aceitas, e o par forma/leitura deve ser diferente. Dois cartões de crédito com leituras diferentes são permitidos. O primeiro método deve coincidir com `paymentMethod`; se o pedido informar `cardEntry` principal, também deve coincidir com a primeira parte. Não há pagamento parcial nem divisão de pendências nesta etapa.
+
+O retorno acrescenta `payments` com valores efetivos, `cardEntry` normalizada (`null` para dinheiro/Pix), `feeCents` e `netCents` de cada transação. Os itens recebem o rateio proporcional por participante e depois por item. O resumo conta um pedido e distribui o bruto pelos pagamentos efetivos. A baixa de estoque acontece uma vez. Pedidos de pagamento único continuam sem `payments`, preservando o formato e o hash de reenvios anteriores.
+
+O CSV por item acrescenta seis colunas com formas, valores e taxas das duas partes. Esses valores aparecem apenas na primeira linha de cada pedido para evitar soma duplicada; as taxas rateadas continuam nas colunas dos itens. O backup SQLite conserva todas as partes.
+
 ## Receber uma pendência
 
 ```json

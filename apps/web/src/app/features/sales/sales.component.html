@@ -41,16 +41,29 @@
           </details>
         </div>
       } @empty { <p class="empty">Clique em um produto para montar o pedido.</p> }
+      <label class="checkbox-label"><input type="checkbox" [ngModel]="splitPayments" (ngModelChange)="setSplitPayments($event)" name="splitPayments" [disabled]="store.busy() || !!pendingSubmission() || status !== 'Pago' || nonCash() || !!store.data()?.fair?.closedAt">Dividir em duas formas de pagamento</label>
       <div class="form-row">
-        <label>Pagamento<select name="payment" [ngModel]="paymentChoice" (ngModelChange)="setMethod($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">@for (choice of methods; track choice.value) { <option [value]="choice.value">{{ choice.label }}</option> }</select></label>
-        <label>Situação<select name="status" [(ngModel)]="status" (ngModelChange)="persist()" [disabled]="store.busy() || !!pendingSubmission() || nonCash() || !!store.data()?.fair?.closedAt"><option>Pago</option><option>Pendente</option></select></label>
+        @if (splitPayments) {
+          <label>Primeira forma de pagamento<select name="payment" [ngModel]="paymentChoice" (ngModelChange)="setMethod($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">@for (choice of splitMethods; track choice.value) { <option [value]="choice.value">{{ choice.label }}</option> }</select></label>
+        } @else {
+          <label>Pagamento<select name="payment" [ngModel]="paymentChoice" (ngModelChange)="setMethod($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">@for (choice of methods; track choice.value) { <option [value]="choice.value">{{ choice.label }}</option> }</select></label>
+        }
+        <label>Situação<select name="status" [ngModel]="status" (ngModelChange)="setStatus($event)" [disabled]="store.busy() || !!pendingSubmission() || nonCash() || splitPayments || !!store.data()?.fair?.closedAt"><option>Pago</option><option>Pendente</option></select></label>
       </div>
+      @if (splitPayments) {
+        <div class="form-row">
+          <label>Valor do primeiro pagamento (R$)<input type="text" inputmode="decimal" name="firstPaymentAmount" [ngModel]="firstPaymentAmount" (ngModelChange)="setFirstPaymentAmount($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt" placeholder="0,00"></label>
+          <label>Segundo pagamento<select name="secondPayment" [ngModel]="secondPaymentChoice" (ngModelChange)="setSecondPayment($event)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt">@for (choice of splitMethods; track choice.value) { <option [value]="choice.value">{{ choice.label }}</option> }</select></label>
+        </div>
+        <div class="cart-total"><span>Restante do segundo pagamento</span><strong data-testid="second-payment-total">{{ secondPaymentAmount() === null ? 'Informe um valor válido' : money(secondPaymentAmount()!) }}</strong></div>
+        @if (splitError(); as error) { <p class="muted" role="status" data-testid="split-error">{{ error }}</p> }
+      }
       <label>Observação<input name="note" [(ngModel)]="note" (ngModelChange)="persist()" maxlength="500" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt" placeholder="Opcional"></label>
       @if (nonCash()) { <p class="muted">Baixa o estoque e registra a saída sem cobrança.</p> }
       @if (status === 'Pendente') { <p class="muted">O estoque será baixado quando o pagamento for recebido.</p> }
       <div class="cart-total"><span>{{ status === 'Pendente' ? 'A receber' : 'Total do pedido' }}</span><strong data-testid="cart-total">{{ quote() === null ? 'Confira os ajustes' : money(quote()!) }}</strong></div>
       @if (cart().length && feeQuote() !== null) { <dl class="totals"><div><dt>{{ status === 'Pendente' ? 'Taxa prevista' : 'Taxa de pagamento' }}{{ automaticFees ? ' · ' + rateLabel() : '' }}</dt><dd data-testid="cart-fee">{{ money(feeQuote()!) }}</dd></div><div><dt>{{ status === 'Pendente' ? 'Líquido previsto' : 'Líquido do pedido' }}</dt><dd data-testid="cart-net">{{ money(netQuote()!) }}</dd></div></dl> }
-      <button type="submit" class="primary full-width" [disabled]="store.busy() || (!pendingSubmission() && (!cart().length || quote() === null || catalogChanged() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || draftDate !== store.date()))">{{ store.saving() ? 'Registrando...' : 'Registrar pedido' }}</button>
+      <button type="submit" class="primary full-width" [disabled]="store.busy() || (!pendingSubmission() && (!cart().length || quote() === null || splitPayments && feeQuote() === null || catalogChanged() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || draftDate !== store.date()))">{{ store.saving() ? 'Registrando...' : 'Registrar pedido' }}</button>
     </form>
   </section>
 </div>

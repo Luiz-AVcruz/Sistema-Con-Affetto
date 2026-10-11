@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { applyPaymentFees, calculateItem, summarize } from '../../apps/api/src/finance.js';
 import { openDatabase } from '../../apps/api/src/database.js';
 import { CashRegister } from '../../apps/api/src/cash-register.js';
-import { calculatePaymentFees, paymentMethods, type CardEntry, type Product, type SaleItemInput } from '@caixa/shared';
+import { calculatePaymentFees, calculateSplitPaymentFees, paymentMethods, type CardEntry, type Product, type SaleItemInput, type SalePaymentInput } from '@caixa/shared';
 
 const binary = process.env['CAIXA_RUST_CORE_BINARY'];
 assert.ok(binary, 'Execute npm run test:rust para compilar e selecionar o núcleo Rust.');
@@ -49,6 +49,94 @@ test('Rust e TypeScript concordam nas taxas e no rateio, incluindo restos e valo
     expected.push(calculatePaymentFees(amounts, method, entry));
   }
   equivalent(commands, expected);
+});
+
+test('Rust e TypeScript concordam no rateio proporcional de taxas de dois pagamentos', () => {
+  const methods: { paymentMethod: SalePaymentInput['paymentMethod']; cardEntry?: CardEntry }[] = [
+    { paymentMethod: 'Dinheiro' }, { paymentMethod: 'Pix' },
+    { paymentMethod: 'Cartão débito', cardEntry: 'Aproximação' },
+    { paymentMethod: 'Cartão débito', cardEntry: 'Inserido' },
+    { paymentMethod: 'Cartão crédito', cardEntry: 'Aproximação' },
+    { paymentMethod: 'Cartão crédito', cardEntry: 'Inserido' },
+  ];
+  const next = generator(), commands: Command[] = [], expected: unknown[] = [];
+  const inputs: { amounts: number[]; ownerIds: number[]; payments: SalePaymentInput[] }[] = [
+    { amounts: [5000, 2000, 1200], ownerIds: [2, 1, 1], payments: [
+      { paymentMethod: 'Dinheiro', amountCents: 5000 }, { paymentMethod: 'Cartão crédito', amountCents: 3200 },
+    ] },
+    { amounts: [200, 300, 500, 0], ownerIds: [7, 7, 8, 9], payments: [
+      { paymentMethod: 'Dinheiro', amountCents: 500 }, { paymentMethod: 'Cartão crédito', amountCents: 500 },
+    ] },
+  ];
+  for (let index = 0; index < 160; index++) {
+    const amounts = Array.from({ length: 1 + next(10) }, () => next(100_000));
+    let total = amounts.reduce((sum, amount) => sum + amount, 0);
+    if (total < 2) { amounts[0] += 2; total += 2; }
+    const firstAmount = 1 + next(total - 1), firstMethod = next(methods.length);
+    let secondMethod = next(methods.length - 1);
+    if (secondMethod >= firstMethod) secondMethod++;
+    const payment = (index: number, amountCents: number): SalePaymentInput => {
+      const { cardEntry, ...method } = methods[index];
+      return { ...method, amountCents, ...(index % 2 === 0 || cardEntry === undefined ? {} : { cardEntry }) };
+    };
+    inputs.push({ amounts, ownerIds: amounts.map(() => 1 + next(4)), payments: [
+      payment(firstMethod, firstAmount), payment(secondMethod, total - firstAmount),
+    ] });
+  }
+  for (const { amounts, ownerIds, payments } of inputs) {
+    commands.push({ operation: 'calculateSplitPaymentFees', amounts, ownerIds, payments });
+    expected.push(calculateSplitPaymentFees(amounts, ownerIds, payments));
+  }
+  equivalent(commands, expected);
+});
+
+test('protocolo de pagamentos divididos preserva erros do helper compartilhado', () => {
+  const cases = [
+    { amounts: [1000, 1000], ownerIds: [1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 1000 }, { paymentMethod: 'Pix', amountCents: 1000 }] },
+    { amounts: [1000, 1000], ownerIds: [1, 1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 0 }, { paymentMethod: 'Pix', amountCents: 2000 }] },
+    { amounts: [1000, 1000], ownerIds: [1, 1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 1000 }, { paymentMethod: 'Dinheiro', amountCents: 1000 }] },
+    { amounts: [1000, 1000], ownerIds: [1, 1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 1000, cardEntry: 'Inserido' }, { paymentMethod: 'Pix', amountCents: 1000 }] },
+    { amounts: [1000, 1000], ownerIds: [1, 1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 1000 }, { paymentMethod: 'Pix', amountCents: 999 }] },
+    { amounts: [-1, 2001], ownerIds: [1, 1], payments: [{ paymentMethod: 'Dinheiro', amountCents: 1000 }, { paymentMethod: 'Pix', amountCents: 1000 }] },
+  ] as const;
+  const commands = cases.map(value => ({ operation: 'calculateSplitPaymentFees', ...value }));
+  const expected = cases.map(value => {
+    try { calculateSplitPaymentFees(value.amounts, value.ownerIds, value.payments); assert.fail('Deveria rejeitar'); }
+    catch (error) {
+      assert.ok(error instanceof Error);
+      return { ok: false, error: { status: 400, message: error.message } };
+    }
+  });
+  assert.deepEqual(evaluate(commands), expected);
+});
+
+test('Rust resume as partes de pagamento lidas do SQLite sem alterar um pedido legado', () => {
+  const db = openDatabase(':memory:'), register = new CashRegister(db);
+  try {
+    db.prepare('INSERT INTO owners(id,name) VALUES(?,?)').run(1, 'Con Affetto');
+    db.prepare('INSERT INTO owners(id,name) VALUES(?,?)').run(2, 'Outra participante');
+    const products = [
+      register.saveProduct({ name: 'Produto parceiro', description: '', ownerId: 2, priceCents: 5000, stock: 10, active: true }),
+      register.saveProduct({ name: 'Caneca fictícia', description: '', ownerId: 1, priceCents: 2000, stock: 10, active: true }),
+      register.saveProduct({ name: 'Biscoito fictício', description: '', ownerId: 1, priceCents: 1200, stock: 10, active: true }),
+    ];
+    const saved = register.createSale({
+      requestId: randomUUID(), date: '2026-10-11', paymentMethod: 'Dinheiro', status: 'Pago', note: 'Paridade fictícia', automaticFees: true,
+      payments: [{ paymentMethod: 'Dinheiro', amountCents: 5000 }, { paymentMethod: 'Cartão crédito', amountCents: 3200 }],
+      items: products.map(product => input(product)),
+    });
+    assert.deepEqual(saved.items.map(item => item.feeCents), [60, 24, 15]);
+    assert.deepEqual(saved.payments?.map(payment => [payment.paymentMethod, payment.amountCents, payment.feeCents]), [
+      ['Dinheiro', 5000, 0], ['Cartão crédito', 3200, 99],
+    ]);
+    const sales = register.sales(), owners = register.owners();
+    equivalent([{ operation: 'summarize', sales, owners, date: '2026-10-11' }], [summarize(sales, owners, '2026-10-11')]);
+
+    // Um registro antigo não contém payments e mantém o método único no resumo.
+    const legacySale = { ...saved, id: randomUUID(), paymentMethod: 'Pix' as const, payments: undefined };
+    const legacySales = [legacySale];
+    equivalent([{ operation: 'summarize', sales: legacySales, owners }], [summarize(legacySales, owners)]);
+  } finally { db.close(); }
 });
 
 test('Rust preserva cálculo, expectativas do catálogo e campos opcionais dos itens', () => {
@@ -169,6 +257,10 @@ test('JSON bruto preserva inteiros com decimal, expoente e zero negativo, inclus
     const parsed = JSON.parse(summaryLine);
     lines.push(summaryLine); expected.push({ ok: true, result: summarize(parsed.sales, parsed.owners) });
   }
+  const splitLine = '{"operation":"calculateSplitPaymentFees","amounts":[9007199254740989.0,2e0],"ownerIds":[1.0,2e0],"payments":[{"paymentMethod":"Dinheiro","amountCents":9007199254740989.0},{"paymentMethod":"Pix","amountCents":2e0}]}';
+  const splitCommand = JSON.parse(splitLine) as { amounts: number[]; ownerIds: number[]; payments: SalePaymentInput[] };
+  lines.push(splitLine);
+  expected.push({ ok: true, result: calculateSplitPaymentFees(splitCommand.amounts, splitCommand.ownerIds, splitCommand.payments) });
   // Exercita os campos numéricos aninhados, inclusive expectativas opcionais e stock.
   const p = product(), item = { ...input(p), expectedOwnerId: p.ownerId };
   const itemCommand = { operation: 'calculateItem', product: { ...p, stock: 10 }, input: item, method: 'Pix' };

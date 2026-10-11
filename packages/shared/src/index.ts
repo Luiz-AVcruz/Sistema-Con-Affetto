@@ -2,7 +2,9 @@ export const paymentMethods = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão cr
 export type PaymentMethod = typeof paymentMethods[number];
 export type CardEntry = 'Aproximação' | 'Inserido';
 export interface PaymentOptions { automaticFees?: true; cardEntry?: CardEntry }
-export { paymentChoices, paymentChoiceValue, paymentLabel, paymentRate, calculatePaymentFees } from './payments.js';
+export interface SalePaymentInput { paymentMethod: PaymentMethod; amountCents: number; cardEntry?: CardEntry }
+export interface SalePayment extends Omit<SalePaymentInput, 'cardEntry'> { cardEntry: CardEntry | null; feeCents: number; netCents: number }
+export { paymentChoices, paymentChoiceValue, paymentLabel, paymentRate, calculatePaymentFees, calculateSplitPaymentFees } from './payments.js';
 export type SaleStatus = 'Pago' | 'Pendente' | 'Cancelado';
 export interface Owner { id: number; name: string }
 export interface Product {
@@ -22,6 +24,7 @@ export interface SaleInput extends PaymentOptions {
   requestId: string; date: string; paymentMethod: PaymentMethod;
   fairId?: number;
   status: 'Pago' | 'Pendente'; note: string; items: SaleItemInput[];
+  payments?: SalePaymentInput[];
 }
 export interface SaleItem extends SaleItemInput {
   name: string; ownerId: number; ownerName: string; priceCents: number;
@@ -33,6 +36,7 @@ export interface Sale {
   grossCents: number; discountCents: number; feeCents: number;
   totalCents: number; netCents: number;
   automaticFees: boolean; cardEntry: CardEntry | null; feeCorrected: boolean;
+  payments?: SalePayment[];
 }
 export interface Summary {
   receivedCents: number; netCents: number; discountCents: number; feeCents: number;

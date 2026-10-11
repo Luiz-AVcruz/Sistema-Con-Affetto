@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from 'express';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ZodError, z } from 'zod';
+import { paymentLabel } from '@caixa/shared';
 import { CashRegister } from './cash-register.js';
 import { BusinessError, businessDate, cashSchema, fairSchema, newFairSchema, productSchema, productUpdateSchema, receiveSchema, saleSchema } from './validation.js';
 
@@ -64,12 +65,19 @@ export function createApp(register: CashRegister, frontend?: string) {
   app.put('/api/days/:date', (req, res) => res.json(context(req.query['fairId']).saveDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.post('/api/days/:date/close', (req, res) => res.json(context(req.query['fairId']).closeDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.get('/api/export/sales.csv', (req, res) => {
-    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação', 'Registrado em (UTC)', 'Origem', 'Feira ID', 'Feira', 'Leitura do cartão', 'Taxa retificada'];
-    const rows = exportFairs(req.query['fairId']).flatMap(fair => new CashRegister(register.db, fair.id).sales().flatMap(sale => sale.items.map(item => [sale.id, sale.date, sale.paymentDate ?? '', sale.status,
-      sale.paymentMethod, item.name, item.ownerName, item.quantity, reais(item.priceCents), reais(item.discountCents),
+    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação', 'Registrado em (UTC)', 'Origem', 'Feira ID', 'Feira', 'Leitura do cartão', 'Taxa retificada', 'Pagamento 1', 'Valor do pagamento 1', 'Taxa do pagamento 1', 'Pagamento 2', 'Valor do pagamento 2', 'Taxa do pagamento 2'];
+    const rows = exportFairs(req.query['fairId']).flatMap(fair => new CashRegister(register.db, fair.id).sales().flatMap(sale => sale.items.map((item,index) => [sale.id, sale.date, sale.paymentDate ?? '', sale.status,
+      sale.payments ? sale.payments.map(payment => paymentLabel(payment.paymentMethod,payment.cardEntry)).join(' + ') : sale.paymentMethod,
+      item.name, item.ownerName, item.quantity, reais(item.priceCents), reais(item.discountCents),
       reais(item.feeCents), reais(item.totalCents), reais(item.netCents),
       reais(sale.status === 'Pago' ? item.totalCents : 0), reais(sale.status === 'Pago' ? item.netCents : 0), sale.note,
-      sale.origin === 'Aplicativo' ? sale.createdAt : '', sale.origin, fair.id, fair.name, sale.cardEntry ?? '', sale.feeCorrected ? 'Sim' : 'Não'])));
+      sale.origin === 'Aplicativo' ? sale.createdAt : '', sale.origin, fair.id, fair.name, sale.cardEntry ?? '', sale.feeCorrected ? 'Sim' : 'Não',
+      ...[0,1].flatMap(position => {
+        // Valores por transação aparecem só no primeiro item, evitando somá-los
+        // novamente quando o pedido possui vários produtos.
+        const payment = index === 0 ? sale.payments?.[position] : undefined;
+        return payment ? [paymentLabel(payment.paymentMethod,payment.cardEntry),reais(payment.amountCents),reais(payment.feeCents)] : ['','',''];
+      })])));
     res.setHeader('Content-Disposition', 'attachment; filename="vendas-feira.csv"');
     res.type('text/csv; charset=utf-8').send('\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n'));
   });

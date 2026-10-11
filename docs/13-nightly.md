@@ -66,7 +66,12 @@ a maquininha e sua taxa. Dinheiro e Pix não têm taxa nesta configuração.
 As taxas e a retificação autorizada dos pedidos anteriores estão descritas em
 [Pagamentos e retificações](14-pagamentos.md).
 
-Essa versão usa banco v6. O Flatpak anterior usa v5 e permanece com seu banco
+Para um atendimento pago de duas formas, marque **Dividir em duas formas de
+pagamento**, escolha as formas e informe o valor da primeira. O aplicativo calcula
+o restante da segunda e registra um único pedido. A regra de rateio está em
+[Pagamentos](14-pagamentos.md).
+
+Essa versão usa banco v7. O Flatpak anterior usa v5 e permanece com seu banco
 separado. Para retornar ao código antigo, restaure o backup anterior à atualização
-em outro arquivo; uma versão v5 recusa um banco v6. Não copie o banco da Nightly
+em outro arquivo; versões v5/v6 recusam um banco v7. Não copie o banco da Nightly
 para a instalação antiga.

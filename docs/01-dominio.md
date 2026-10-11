@@ -2,7 +2,7 @@
 
 ## Problema
 
-A planilha distribui dados entre Vendas, Produtos, Fechamento do dia, Total da feira e Histórico. Um atendimento pode reunir produtos de participantes diferentes e usar um único pagamento. O aplicativo precisa representar esse pedido como uma unidade, preservando a parte de cada participante.
+A planilha distribui dados entre Vendas, Produtos, Fechamento do dia, Total da feira e Histórico. Um atendimento pode reunir produtos de participantes diferentes e usar um ou dois pagamentos. O aplicativo representa esse pedido como uma unidade, preservando a parte de cada participante. A divisão em dois pagamentos está descrita em [Pagamentos](14-pagamentos.md).
 
 Exemplo: um produto de R$ 15,00 da participante A e outro de R$ 40,00 da participante B formam um pedido de R$ 55,00. Há um recebimento, dois itens e duas partes. Somar R$ 55,00 para cada participante duplicaria a receita.
 

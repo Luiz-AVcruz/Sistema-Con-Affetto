@@ -28,7 +28,7 @@ export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVe
 }
 
 export function legacyPaymentColumns(db: Database.Database): void {
-  db.exec('DROP TABLE payment_fee_corrections; ALTER TABLE sales DROP COLUMN automatic_fees; ALTER TABLE sales DROP COLUMN card_entry; PRAGMA user_version = 5;');
+  db.exec('DROP TABLE sale_payments; DROP TABLE payment_fee_corrections; ALTER TABLE sales DROP COLUMN automatic_fees; ALTER TABLE sales DROP COLUMN card_entry; PRAGMA user_version = 5;');
 }
 
 export function withoutPaymentColumns(rows: Record<string, unknown>[]) {

@@ -6,7 +6,7 @@ O Tauri abre uma janela própria e gerencia o backend local. A interface web per
 
 ## Estado da primeira versão
 
-Registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelamentos, exclusão de lançamentos acidentais, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, meta e encerramento de feiras, histórico de eventos, exportação CSV e backup SQLite.
+Registra pedidos mistos, pagamento único ou dividido em duas formas, pendências, permutas, brindes, cancelamentos, exclusão de lançamentos acidentais, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, meta e encerramento de feiras, histórico de eventos, exportação CSV e backup SQLite.
 
 Nesta feira, a meta considera o **líquido da Con Affetto**. Cartões por aproximação no celular e inseridos na maquininha têm taxas automáticas distintas; dinheiro e Pix têm taxa zero. Cada participante tem bruto, taxas e líquido separados e arca com sua parte da taxa. Consulte [pagamentos e retificações](docs/14-pagamentos.md).
 

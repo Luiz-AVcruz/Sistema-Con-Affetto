@@ -10,6 +10,11 @@ export const productSchema = z.object({
 }).strict();
 export const productUpdateSchema = productSchema.extend({ expectedVersion: z.number().int().positive() });
 const paymentOptions = { automaticFees: z.literal(true).optional(), cardEntry: z.enum(['Aproximação', 'Inserido']).optional() };
+const splitPaymentSchema = z.object({
+  paymentMethod: z.enum(['Dinheiro','Pix','Cartão débito','Cartão crédito']),
+  amountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  cardEntry: z.enum(['Aproximação','Inserido']).optional()
+}).strict();
 export const saleSchema = z.object({
   requestId: z.uuid(), date: businessDate, paymentMethod: z.enum(paymentMethods),
   fairId: z.number().int().positive().optional(),
@@ -22,7 +27,8 @@ export const saleSchema = z.object({
     expectedOwnerId: z.number().int().positive().optional(),
     expectedOwnerName: z.string().trim().min(1).max(100).optional(),
     discountCents: money, feeCents: money
-  }).strict()).min(1).max(100)
+  }).strict()).min(1).max(100),
+  payments: z.array(splitPaymentSchema).length(2).optional()
 }).strict();
 export const cashSchema = z.object({
   openingCents: money, extraCents: money, withdrawalCents: money,

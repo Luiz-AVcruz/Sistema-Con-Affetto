@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import type { CardEntry, PaymentOptions, Owner, Product, ProductInput, SaleInput, Sale, SaleItem, Summary, Day, CashInput, Bootstrap, PaymentMethod, Fair, FairInput } from '@caixa/shared';
-import { applyPaymentFees, calculateItem, isNonCash, summarize } from './finance.js';
+import type { CardEntry, PaymentOptions, Owner, Product, ProductInput, SaleInput, Sale, SaleItem, Summary, Day, CashInput, Bootstrap, PaymentMethod, Fair, FairInput, SalePayment } from '@caixa/shared';
+import { applyPaymentFees, applySplitPaymentFees, calculateItem, isNonCash, summarize } from './finance.js';
 import { requireCondition } from './validation.js';
 
 type SaleRow = { id: string; fair_id: number; request_hash: string; date: string; payment_date: string | null; payment_method: PaymentMethod; status: Sale['status']; note: string; created_at: string; origin: Sale['origin']; automatic_fees: number; card_entry: CardEntry | null; corrected_entry: CardEntry | null };
@@ -115,6 +115,14 @@ export class CashRegister {
       i.total_cents AS totalCents, ${includeCorrections ? 'CASE WHEN c.id IS NOT NULL THEN i.total_cents-c.corrected_fee_cents ELSE i.net_cents END' : 'i.net_cents'} AS netCents
       FROM sale_items i JOIN sales s ON s.id=i.sale_id LEFT JOIN payment_fee_corrections c ON c.sale_item_id=i.id
       WHERE s.fair_id=? AND s.deleted_at IS NULL ORDER BY i.id`).all(this.fairId) as (SaleItem & { saleId: string })[];
+    const paymentRows = this.db.prepare(`SELECT p.sale_id AS saleId,p.payment_method AS paymentMethod,p.amount_cents AS amountCents,
+      p.card_entry AS cardEntry,p.fee_cents AS feeCents,p.amount_cents-p.fee_cents AS netCents
+      FROM sale_payments p JOIN sales s ON s.id=p.sale_id WHERE s.fair_id=? AND s.deleted_at IS NULL ORDER BY p.position`)
+      .all(this.fairId) as (SalePayment & { saleId: string })[];
+    const paymentsBySale = new Map<string, SalePayment[]>();
+    for (const {saleId,...payment} of paymentRows) {
+      const payments = paymentsBySale.get(saleId) ?? []; payments.push(payment); paymentsBySale.set(saleId,payments);
+    }
     return rows.map(row => {
       const items = allItems.filter(item => item.saleId === row.id).map(({ saleId, ...item }) => item);
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
@@ -122,7 +130,8 @@ export class CashRegister {
         status: row.status, note: row.note, createdAt: row.created_at, origin: row.origin, items,
         automaticFees: !!row.automatic_fees, cardEntry: (includeCorrections ? row.corrected_entry : null) ?? row.card_entry,
         feeCorrected: includeCorrections && row.corrected_entry !== null,
-        grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents') };
+        grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents'),
+        ...(paymentsBySale.has(row.id) ? { payments: paymentsBySale.get(row.id)! } : {}) };
     });
   }
 
@@ -166,19 +175,29 @@ export class CashRegister {
       const products = this.products();
       requireCondition(!input.cardEntry || input.automaticFees && input.paymentMethod.startsWith('Cartão'), 'A leitura do cartão exige pagamento de cartão com taxa automática.', 400);
       requireCondition(!input.automaticFees || input.items.every(item => item.feeCents === 0), 'Na taxa automática, envie zero nas taxas manuais dos itens.', 400);
-      const entry = input.automaticFees && input.paymentMethod.startsWith('Cartão') ? input.cardEntry ?? 'Aproximação' : null;
+      if (input.payments) {
+        requireCondition(input.status === 'Pago' && input.automaticFees === true, 'Dois pagamentos exigem pedido pago com taxas automáticas.', 400);
+        requireCondition(input.payments[0]?.paymentMethod === input.paymentMethod, 'O primeiro pagamento deve corresponder à forma principal.', 400);
+        requireCondition(!input.cardEntry || input.cardEntry === (input.payments[0]?.cardEntry ?? 'Aproximação'), 'A leitura do cartão principal difere do primeiro pagamento.', 400);
+      }
+      const entry = input.automaticFees && input.paymentMethod.startsWith('Cartão') ? input.payments?.[0]?.cardEntry ?? input.cardEntry ?? 'Aproximação' : null;
       const calculated = input.items.map(item => {
         const product = products.find(product => product.id === item.productId);
         requireCondition(product, 'Produto inexistente.', 400);
         return calculateItem(product, item, input.paymentMethod);
       });
-      const items = input.automaticFees ? applyPaymentFees(calculated, input.paymentMethod, entry) : calculated;
+      const divided = input.payments ? applySplitPaymentFees(calculated, input.payments) : null;
+      const items = divided?.items ?? (input.automaticFees ? applyPaymentFees(calculated, input.paymentMethod, entry) : calculated);
       this.db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at,fair_id,automatic_fees,card_entry) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
         .run(input.requestId, hash, input.date, input.status === 'Pago' ? input.date : null, input.paymentMethod, input.status, input.note, new Date().toISOString(), this.fairId, Number(!!input.automaticFees), entry);
       const insert = this.db.prepare(`INSERT INTO sale_items(sale_id,product_id,name,owner_id,owner_name,quantity,price_cents,
         discount_cents,fee_cents,gross_cents,total_cents,net_cents) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
       for (const item of items) insert.run(input.requestId, item.productId, item.name, item.ownerId, item.ownerName,
         item.quantity, item.priceCents, item.discountCents, item.feeCents, item.grossCents, item.totalCents, item.netCents);
+      if (divided) {
+        const insertPayment = this.db.prepare('INSERT INTO sale_payments(sale_id,position,payment_method,amount_cents,fee_cents,card_entry) VALUES(?,?,?,?,?,?)');
+        divided.payments.forEach((payment,index) => insertPayment.run(input.requestId,index,payment.paymentMethod,payment.amountCents,payment.feeCents,payment.cardEntry));
+      }
       if (input.status === 'Pago') this.changeStock(items, true);
       return this.sales().find(sale => sale.id === input.requestId)!;
     })();
@@ -192,6 +211,7 @@ export class CashRegister {
       requireCondition(!options.cardEntry || automaticFees && paymentMethod.startsWith('Cartão'), 'A leitura do cartão exige pagamento de cartão com taxa automática.', 400);
       const entry = automaticFees && paymentMethod.startsWith('Cartão') ? options.cardEntry ?? sale.cardEntry ?? 'Aproximação' : null;
       if (sale.status === 'Pago') {
+        requireCondition(!sale.payments, 'Este pedido já foi recebido em duas formas de pagamento. Confira o histórico.');
         requireCondition(sale.paymentDate === date && sale.paymentMethod === paymentMethod && (!options.automaticFees || sale.automaticFees)
           && (!options.cardEntry || sale.cardEntry === entry), 'Pedido já recebido. Confira o histórico.');
         return sale;

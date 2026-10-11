@@ -7,7 +7,8 @@
 | Tauri com Angular + Node/TypeScript | Abrir pelo ícone, reaproveitando telas e regras já verificadas. A prioridade passou a ser utilidade no comércio. | Se medições ou limitações de uso justificarem substituir a interface ou o backend. |
 | Backend local gerenciado pelo desktop | Um operador offline, sem iniciar serviços manualmente. O modo web continua disponível para manutenção. | Se houver uso por rede ou outro dispositivo. |
 | SQLite e SQL explícito | Persistência local e transações observáveis, sem administrar outro serviço. | Se medições e novos requisitos justificarem outra arquitetura. |
-| Ajustes por item | Preservar a regra da planilha e evitar inventar rateio global. | Se desconto ou taxa do pedido inteiro passar a ser necessário. |
+| Descontos e dados históricos por item | Preservar valores praticados e as regras de conferência. Taxas automáticas seguem a transação real; pagamentos divididos rateiam a taxa proporcionalmente entre participantes e depois entre seus itens. | Se houver desconto global ou outra regra de cobrança confirmada. |
+| Duas formas no mesmo pedido pago | Representar um atendimento sem duplicar pedido ou estoque. A soma das taxas por transação é dividida pelas quotas de cada participante após descontos, com maiores restos para os centavos indivisíveis. | Se forem necessários mais de dois pagamentos ou recebimento parcial de pendências. |
 | Pendência sem reserva de estoque | Reproduzir a planilha. | Se produto separado para cliente precisar ficar indisponível para outros atendimentos. |
 | Recebimento em data própria | O dinheiro entra no caixa no dia em que é recebido. | Se o relatório desejar outra convenção, mantendo clara a distinção das datas. |
 | Snapshot de fechamento bloqueado | Proteger um dia já conferido contra alteração posterior silenciosa. | Quando houver procedimento de retificação com motivo, histórico e backup. |

@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const schemaVersion = 6;
+export const schemaVersion = 7;
 
 export function openDatabase(path: string): Database.Database {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -120,6 +120,21 @@ export function openDatabase(path: string): Database.Database {
           card_entry TEXT NOT NULL CHECK(card_entry IN ('Aproximação','Inserido')),
           reason TEXT NOT NULL, created_at TEXT NOT NULL
         ); PRAGMA user_version = 6;`);
+    }).immediate();
+    if (version < 7) db.transaction(() => {
+      // Somente vendas novas com dois pagamentos usam esta tabela. Não há
+      // backfill nem reescrita de hashes, itens, taxas ou snapshots anteriores.
+      db.exec(`CREATE TABLE sale_payments (
+        id INTEGER PRIMARY KEY, sale_id TEXT NOT NULL REFERENCES sales(id),
+        position INTEGER NOT NULL CHECK(position IN (0,1)),
+        payment_method TEXT NOT NULL CHECK(payment_method IN ('Dinheiro','Pix','Cartão débito','Cartão crédito')),
+        amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+        fee_cents INTEGER NOT NULL CHECK(fee_cents >= 0 AND fee_cents <= amount_cents),
+        card_entry TEXT CHECK(card_entry IS NULL OR card_entry IN ('Aproximação','Inserido')),
+        CHECK((payment_method IN ('Cartão débito','Cartão crédito') AND card_entry IS NOT NULL)
+          OR (payment_method IN ('Dinheiro','Pix') AND card_entry IS NULL)),
+        UNIQUE(sale_id,position)
+      ); PRAGMA user_version = 7;`);
     }).immediate();
     return db;
   } catch (error) { db.close(); throw error; }

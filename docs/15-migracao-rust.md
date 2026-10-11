@@ -6,7 +6,7 @@ O objetivo operacional é manter Angular e Tauri, portando o backend em etapas a
 
 Em 11/10/2026 foi iniciada a primeira etapa: o núcleo financeiro Rust em `packages/caixa-core`. Ele é uma biblioteca independente e um executável de comparação por JSON. A Nightly, o Flatpak e a API ainda usam o backend Node. Esta etapa não proporciona redução de tamanho ou RAM do aplicativo em uso; esses ganhos dependem de substituir o backend e retirar seus recursos do pacote.
 
-Nenhum esquema foi alterado, nenhum banco real foi aberto pela implementação Rust e nenhuma dependência do desktop foi modificada. O código Rust não possui acesso a SQLite, arquivos do caixa, estoque ou snapshots. O caminho de retorno continua sendo o aplicativo atual.
+A implementação Rust não altera esquemas nem abre bancos reais; nenhuma dependência do desktop foi modificada por esta etapa. O código Rust não possui acesso a SQLite, arquivos do caixa, estoque ou snapshots. O banco v7 para dois pagamentos é mantido pelo backend Node. O caminho de retorno do núcleo continua sendo o aplicativo atual; versões anteriores ao esquema v7 exigem seu backup compatível, conforme [Pagamentos](14-pagamentos.md).
 
 ## Responsabilidades já portadas
 
@@ -15,6 +15,7 @@ Nenhum esquema foi alterado, nenhum banco real foi aberto pela implementação R
 - Taxas de cartão: débito/crédito por aproximação ou inserido; demais meios sem taxa automática.
 - Arredondamento único por pedido e rateio pelos maiores restos, com desempate pela ordem dos itens.
 - Aplicação das taxas por item sem modificar os valores de entrada.
+- Dois pagamentos: taxa por transação, rateio proporcional entre participantes e depois entre itens, e resumo por partes efetivas.
 - Resumo por pagamento e participante, pendências, permutas e brindes.
 - Filtro do dia pela data do recebimento para pedidos pagos e pela data do pedido para pendências.
 
@@ -66,7 +67,7 @@ Resposta:
 {"ok":true,"result":[59,62]}
 ```
 
-Os quatro comandos são `calculatePaymentFees`, `calculateItem`, `applyPaymentFees` e `summarize`. Erros de negócio retornam `ok: false` com `error.status` e `error.message`. Uma linha inválida recebe uma resposta de erro e não impede a leitura da próxima. Erros de entrada/saída do processo encerram com código diferente de zero. Os status são dados de comparação; não existe servidor HTTP nesta etapa.
+Os comandos são `calculatePaymentFees`, `calculateSplitPaymentFees`, `calculateItem`, `applyPaymentFees` e `summarize`. O comando de divisão recebe `amounts`, `ownerIds` e `payments`, e retorna taxas por item e metadados efetivos de cada pagamento. Erros de negócio retornam `ok: false` com `error.status` e `error.message`. Uma linha inválida recebe uma resposta de erro e não impede a leitura da próxima. Erros de entrada/saída do processo encerram com código diferente de zero. Os status são dados de comparação; não existe servidor HTTP nesta etapa.
 
 ## Próximas fronteiras e condição de passagem
 

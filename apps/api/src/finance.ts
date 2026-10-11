@@ -1,5 +1,5 @@
-import { calculatePaymentFees, paymentMethods, type CardEntry, type Product, type Sale, type SaleItem, type SaleItemInput, type PaymentMethod, type Owner, type Summary } from '@caixa/shared';
-import { requireCondition } from './validation.js';
+import { calculatePaymentFees, calculateSplitPaymentFees, paymentMethods, type CardEntry, type Product, type Sale, type SaleItem, type SaleItemInput, type PaymentMethod, type Owner, type Summary, type SalePaymentInput } from '@caixa/shared';
+import { BusinessError, requireCondition } from './validation.js';
 
 export function isNonCash(method: PaymentMethod): boolean {
   return method === 'Permuta' || method === 'Não cobrado';
@@ -39,8 +39,9 @@ export function summarize(sales: Sale[], owners: Owner[], date?: string): Summar
     summary.netCents += sale.netCents;
     summary.discountCents += sale.discountCents;
     summary.feeCents += sale.feeCents;
-    const payment = summary.byPayment.find(entry => entry.method === sale.paymentMethod)!;
-    payment.totalCents += sale.totalCents;
+    if (sale.payments) {
+      for (const payment of sale.payments) summary.byPayment.find(entry => entry.method === payment.paymentMethod)!.totalCents += payment.amountCents;
+    } else summary.byPayment.find(entry => entry.method === sale.paymentMethod)!.totalCents += sale.totalCents;
     for (const item of sale.items) {
       let owner = summary.byOwner.find(entry => entry.ownerId === item.ownerId);
       if (!owner) { owner = { ownerId: item.ownerId, name: item.ownerName, receivedCents: 0, feeCents: 0, netCents: 0 }; summary.byOwner.push(owner); }
@@ -55,4 +56,11 @@ export function summarize(sales: Sale[], owners: Owner[], date?: string): Summar
 export function applyPaymentFees(items: SaleItem[], method: PaymentMethod, entry: CardEntry | null): SaleItem[] {
   const fees = calculatePaymentFees(items.map(item => item.totalCents), method, entry);
   return items.map((item, index) => ({ ...item, feeCents: fees[index], netCents: item.totalCents - fees[index] }));
+}
+
+export function applySplitPaymentFees(items: SaleItem[], payments: SalePaymentInput[]) {
+  try {
+    const result = calculateSplitPaymentFees(items.map(item => item.totalCents), items.map(item => item.ownerId), payments);
+    return { payments: result.payments, items: items.map((item, index) => ({ ...item, feeCents: result.fees[index], netCents: item.totalCents - result.fees[index] })) };
+  } catch (error) { throw new BusinessError(400, error instanceof Error ? error.message : 'Pagamentos inválidos.'); }
 }

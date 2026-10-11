@@ -1,6 +1,7 @@
 use crate::model::{
     CardEntry, FinancialSale, Owner, OwnerSummary, PaymentMethod, PaymentSummary, Product,
-    SaleItem, SaleItemInput, SaleStatus, Summary,
+    SaleItem, SaleItemInput, SalePayment, SalePaymentInput, SaleStatus, SplitPaymentCalculation,
+    Summary,
 };
 use crate::{add, exact_non_negative, require, Result, MAX_SAFE_INTEGER};
 use std::collections::HashMap;
@@ -63,6 +64,165 @@ pub fn calculate_payment_fees(
         fees[index] += 1;
     }
     Ok(fees)
+}
+
+/// Distribui a taxa das duas transações entre participantes e depois entre
+/// seus itens. Em cada etapa, os centavos indivisíveis vão para os maiores
+/// restos; empates mantêm a ordem original.
+pub fn calculate_split_payment_fees(
+    amounts: &[i64],
+    owner_ids: &[i64],
+    inputs: &[SalePaymentInput],
+) -> Result<SplitPaymentCalculation> {
+    require(
+        amounts
+            .iter()
+            .all(|amount| (0..=MAX_SAFE_INTEGER).contains(amount))
+            && owner_ids.len() == amounts.len()
+            && owner_ids
+                .iter()
+                .all(|owner_id| (1..=MAX_SAFE_INTEGER).contains(owner_id)),
+        400,
+        "Itens inválidos para dividir o pagamento.",
+    )?;
+    require(
+        inputs.len() == 2,
+        400,
+        "Informe exatamente duas formas de pagamento.",
+    )?;
+
+    let mut payments = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        require(
+            matches!(
+                input.payment_method,
+                PaymentMethod::Cash
+                    | PaymentMethod::Pix
+                    | PaymentMethod::Debit
+                    | PaymentMethod::Credit
+            ) && (1..=MAX_SAFE_INTEGER).contains(&input.amount_cents),
+            400,
+            "Cada pagamento deve ter uma forma válida e um valor maior que zero.",
+        )?;
+        require(
+            input.card_entry.is_none()
+                || matches!(
+                    input.payment_method,
+                    PaymentMethod::Debit | PaymentMethod::Credit
+                ),
+            400,
+            "A leitura do cartão só pode ser informada em pagamentos de cartão.",
+        )?;
+        let card_entry = if matches!(
+            input.payment_method,
+            PaymentMethod::Debit | PaymentMethod::Credit
+        ) {
+            Some(input.card_entry.unwrap_or(CardEntry::Contactless))
+        } else {
+            None
+        };
+        let fee_cents =
+            calculate_payment_fees(&[input.amount_cents], input.payment_method, card_entry)?[0];
+        payments.push(SalePayment {
+            payment_method: input.payment_method,
+            amount_cents: input.amount_cents,
+            card_entry,
+            fee_cents,
+            net_cents: input.amount_cents - fee_cents,
+        });
+    }
+    require(
+        payments[0].payment_method != payments[1].payment_method
+            || payments[0].card_entry != payments[1].card_entry,
+        400,
+        "Escolha duas formas de pagamento diferentes.",
+    )?;
+
+    let item_total = amounts
+        .iter()
+        .map(|amount| i128::from(*amount))
+        .sum::<i128>();
+    let payment_total = payments
+        .iter()
+        .map(|payment| i128::from(payment.amount_cents))
+        .sum::<i128>();
+    require(
+        item_total <= i128::from(MAX_SAFE_INTEGER) && item_total == payment_total,
+        400,
+        "A soma dos dois pagamentos deve ser igual ao total do pedido.",
+    )?;
+
+    let mut group_indices = HashMap::new();
+    let mut groups: Vec<(Vec<usize>, Vec<i64>, i64)> = Vec::new();
+    for (index, (&amount, &owner_id)) in amounts.iter().zip(owner_ids).enumerate() {
+        let group_index = *group_indices.entry(owner_id).or_insert_with(|| {
+            groups.push((Vec::new(), Vec::new(), 0));
+            groups.len() - 1
+        });
+        let group = &mut groups[group_index];
+        group.0.push(index);
+        group.1.push(amount);
+        group.2 += amount;
+    }
+
+    let total_fee = payments
+        .iter()
+        .map(|payment| i128::from(payment.fee_cents))
+        .sum::<i128>();
+    let total_fee = exact_non_negative(total_fee)?;
+    let owner_fees = allocate_cents(
+        total_fee,
+        &groups.iter().map(|group| group.2).collect::<Vec<_>>(),
+    )?;
+    let mut fees = vec![0; amounts.len()];
+    for (group_index, (indices, weights, _)) in groups.iter().enumerate() {
+        for (item_index, fee) in allocate_cents(owner_fees[group_index], weights)?
+            .into_iter()
+            .enumerate()
+        {
+            fees[indices[item_index]] = fee;
+        }
+    }
+
+    Ok(SplitPaymentCalculation { fees, payments })
+}
+
+fn allocate_cents(total: i64, weights: &[i64]) -> Result<Vec<i64>> {
+    let denominator = weights
+        .iter()
+        .map(|weight| i128::from(*weight))
+        .sum::<i128>();
+    if denominator == 0 {
+        require(
+            total == 0,
+            400,
+            "Não é possível ratear uma taxa sem valor recebido.",
+        )?;
+        return Ok(vec![0; weights.len()]);
+    }
+
+    let mut allocated = Vec::with_capacity(weights.len());
+    let mut priority = Vec::with_capacity(weights.len());
+    let mut floor_total = 0_i128;
+    for (index, &weight) in weights.iter().enumerate() {
+        let numerator = i128::from(total) * i128::from(weight);
+        let floor = numerator / denominator;
+        floor_total += floor;
+        allocated.push(exact_non_negative(floor)?);
+        priority.push((index, numerator % denominator));
+    }
+    let remaining = usize::try_from(i128::from(total) - floor_total)
+        .map_err(|_| crate::BusinessError::new(400, "Distribuição de taxa inválida."))?;
+    require(
+        remaining <= weights.len(),
+        400,
+        "Distribuição de taxa inválida.",
+    )?;
+    priority.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    for &(index, _) in priority.iter().take(remaining) {
+        allocated[index] += 1;
+    }
+    Ok(allocated)
 }
 
 pub fn calculate_item(
@@ -222,11 +382,23 @@ pub fn summarize(sales: &[FinancialSale], owners: &[Owner], date: Option<&str>) 
         add(&mut summary.net_cents, sale.net_cents)?;
         add(&mut summary.discount_cents, sale.discount_cents)?;
         add(&mut summary.fee_cents, sale.fee_cents)?;
-        let index = sale
-            .payment_method
-            .payment_index()
-            .expect("pagamento financeiro");
-        add(&mut summary.by_payment[index].total_cents, sale.total_cents)?;
+        if let Some(payments) = &sale.payments {
+            for payment in payments {
+                let index = payment.payment_method.payment_index().ok_or_else(|| {
+                    crate::BusinessError::new(400, "Pagamento financeiro inválido.")
+                })?;
+                add(
+                    &mut summary.by_payment[index].total_cents,
+                    payment.amount_cents,
+                )?;
+            }
+        } else {
+            let index = sale
+                .payment_method
+                .payment_index()
+                .expect("pagamento financeiro");
+            add(&mut summary.by_payment[index].total_cents, sale.total_cents)?;
+        }
         for item in &sale.items {
             let index = *owner_indices.entry(item.owner_id).or_insert_with(|| {
                 summary.by_owner.push(OwnerSummary {

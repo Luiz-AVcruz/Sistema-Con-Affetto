@@ -30,7 +30,12 @@ test('aproximação e inserido calculam taxas, recebem pendência sem taxa no Pi
   await expect(page.getByTestId('cart-fee')).toContainText('1,85');
   const response = page.waitForResponse(r => r.url().endsWith('/api/sales') && r.request().method() === 'POST');
   await page.getByRole('button',{name:'Registrar pedido',exact:true}).click();
-  const savedResponse=await response; expect(savedResponse.ok()).toBeTruthy(); const saved=await savedResponse.json();
+  const savedResponse=await response; expect(savedResponse.ok()).toBeTruthy();
+  // Após reload, o Brave pode descartar o corpo do POST na fronteira CDP.
+  // Conferir o pedido persistido pelo UUID também prova o valor gravado no SQLite.
+  const savedData=await(await request.get('/api/bootstrap?date='+date)).json();
+  const saved=savedData.sales.find((sale:any)=>sale.id===savedResponse.request().postDataJSON().requestId);
+  expect(saved).toBeDefined();
   expect(saved.cardEntry).toBe('Aproximação'); expect(saved.feeCents).toBe(185);
   expect(saved.items.map((item:any)=>[item.totalCents,item.feeCents,item.netCents])).toEqual([[2000,62,1938],[4000,123,3877]]);
   await expect(page.getByTestId('cart-total')).toContainText('0,00');
