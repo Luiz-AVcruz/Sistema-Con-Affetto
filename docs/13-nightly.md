@@ -1,0 +1,42 @@
+# Nightly local
+
+O atalho **Caixa da Feira — Nightly** abre uma janela Tauri a partir dos fontes
+locais. Ao iniciar, recompila Angular/Node e atualiza o executável Rust quando
+seus fontes ou o compilador mudam. Guarda a identificação desses arquivos para
+reutilizar a janela já compilada nas outras aberturas. Não cria nem instala um
+Flatpak. Feche e reabra para aplicar edições; a janela aberta não recarrega
+automaticamente. A preparação pode levar alguns
+segundos. Mudanças nas dependências exigem instalá-las antes; o Cargo do atalho
+usa o modo offline.
+
+Neste notebook, os fontes estão em `~/Projetos/Sistema-Con-Affetto` e o banco
+principal durante o desenvolvimento é `data/nightly/caixa.sqlite`. Ele foi
+inicializado com uma cópia consistente do caixa anterior. Depois da cópia,
+Nightly e Flatpak têm históricos independentes: não há sincronização nem união
+automática. Os dados da Nightly são reais enquanto ela for usada no atendimento;
+testes fictícios continuam exigindo outro banco.
+
+O atalho mantém uma trava durante a preparação e a execução. Uma segunda
+abertura não recompila os recursos de uma janela em uso. Feche a outra variante
+do Caixa antes de abrir a Nightly. O perfil WebKit da Nightly também é separado,
+para não compartilhar rascunhos com o Flatpak.
+
+Para recriar o atalho sem substituir o banco existente:
+
+```bash
+npm run nightly:install
+```
+
+O menu usa `~/.local/share/applications/caixa-da-feira-nightly.desktop`.
+O diagnóstico fica em `~/.local/state/caixa-da-feira-nightly/nightly.log`.
+Se mover o repositório, execute o instalador novamente. Para escolher outro
+banco já restaurado, use `CAIXA_DB=/caminho/absoluto/caixa.sqlite npm run nightly:install`.
+
+Faça backups pela aba Histórico. Ao passar para o Flatpak, feche o caixa,
+restaure esse backup em um arquivo novo usando o restaurador da versão de
+destino e confira os registros antes de selecioná-lo. O restaurador recusa
+esquemas futuros incompatíveis e destinos existentes. Não sobrescreva o banco
+da outra versão nem copie somente um SQLite aberto com WAL.
+
+O Flatpak pode ser construído ao final do dia com `npm run flatpak:build`.
+Atualizar o pacote não transfere os dados lançados na Nightly.

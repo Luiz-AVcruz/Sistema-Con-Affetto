@@ -15,6 +15,7 @@ Leia nesta ordem:
 9. [Metas e feiras](10-feiras.md): operação, encerramento, histórico, exportação e preservação de bancos antigos.
 10. [Aplicativo desktop](11-desktop.md): instalação local, abertura, encerramento e exportação no Tauri.
 11. [Flatpak privado](12-flatpak.md): pacote Linux pronto, compilação no SDK e transferência separada do banco.
+12. [Nightly local](13-nightly.md): atalho que abre os fontes atuais, banco separado e passagem para o Flatpak.
 
 Depois de mudar um comportamento, atualize a regra correspondente e o teste que a demonstra. Registre decisões específicas em [Decisões e pendências](07-decisoes.md), com o motivo e a condição que justificaria revisá-las.
 

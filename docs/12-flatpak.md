@@ -108,6 +108,9 @@ a compilação privada acessa a internet para baixá-las. As branches dos SDKs
 recebem atualizações, portanto o procedimento não promete identidade binária
 entre builds feitos com revisões diferentes do SDK.
 
+No Zorin, o builder nativo também precisa de `elfutils` no host para finalizar
+os binários (`eu-strip`). Instale-o com `pkexec apt-get install elfutils`.
+
 O resultado fica em `dist/flatpak/caixa-da-feira-0.1.0-x86_64.flatpak`, com
 checksum ao lado. Fontes, caches, build e repositório OSTree também ficam em
 `dist/flatpak/`, ignorado pelo Git. O build executa testes de regras/API,
@@ -147,8 +150,16 @@ de empacotamento e cinco de Rust; duas comparações com dados privados foram
 puladas. O diagnóstico acima passou no pacote instalado no PC, com Node
 24.21.0 e SQLite nativo 13.0.3. Um teste sem janela do portal de documentos
 também confirmou criação e substituição de arquivo, conteúdo completo no
-host e recusa de escrita sem permissão. A janela Tauri, o diálogo gráfico e
-a execução no Zorin ainda precisam de conferência manual.
+host e recusa de escrita sem permissão. A janela Tauri e o diálogo gráfico de
+arquivos no Flatpak ainda precisam de conferência manual.
+
+No Zorin OS 18.1, em 11/10/2026, o pacote foi compilado, instalado e passou
+no mesmo diagnóstico de runtime. A restauração preservou todas as tabelas,
+registros e snapshots da cópia inicial. A janela local Nightly foi aberta,
+reaberta com cache e usada no atendimento; sua verificação de abertura duplicada
+preservou os recursos da instância ativa. O ensaio gráfico do Flatpak foi
+interrompido pela instância Nightly em uso, antes de qualquer pedido de teste.
+Os bancos continuam independentes. Consulte [Nightly local](13-nightly.md).
 
 Referências: [conceitos do Flatpak](https://docs.flatpak.org/en/latest/basic-concepts.html),
 [pacotes de arquivo único](https://docs.flatpak.org/en/latest/single-file-bundles.html),

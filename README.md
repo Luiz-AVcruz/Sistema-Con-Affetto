@@ -17,6 +17,8 @@ Antes de usar o aplicativo como caixa principal: conferir o catálogo, o histór
 ## Executar
 
 Para o aplicativo desktop, consulte [instalação e operação local](docs/11-desktop.md).
+Para usar o código local pelo atalho **Caixa da Feira — Nightly**, consulte
+[Nightly local](docs/13-nightly.md). A Nightly recompila ao abrir e usa seu próprio banco.
 Para instalar o pacote pronto no EndeavourOS ou Zorin, sem compilar em cada
 máquina, consulte [Flatpak privado](docs/12-flatpak.md). O banco é restaurado
 separadamente e não é incluído no pacote. O fluxo abaixo executa a interface
@@ -25,7 +27,7 @@ web de desenvolvimento/validação.
 Requisitos: Node 24 LTS, npm e um navegador atual. As versões exatas das dependências estão no `package-lock.json`. Não é necessário instalar um servidor de banco de dados.
 
 ```bash
-cd ~/Projetos/caixa-da-feira
+cd ~/Projetos/Sistema-Con-Affetto
 npm ci
 npm run build
 npm start
@@ -90,7 +92,11 @@ npm run test:e2e
 
 ## Dados e recuperação
 
-O banco de uso é `data/caixa.sqlite`. O SQLite pode criar arquivos `-wal` e `-shm` enquanto o programa está aberto. Esses arquivos fazem parte do funcionamento do banco. Não copie apenas o arquivo principal como backup de um programa em execução.
+O modo web usa `data/caixa.sqlite` por padrão; a Nightly usa o banco escolhido
+em seu atalho (neste notebook, `data/nightly/caixa.sqlite`) e o Flatpak usa sua
+pasta privada. O SQLite pode criar arquivos `-wal` e `-shm` enquanto o programa
+está aberto. Esses arquivos fazem parte do funcionamento do banco. Não copie
+apenas o arquivo principal como backup de um programa em execução.
 
 Na aba **Histórico**, use **Baixar backup**. O arquivo baixado contém um snapshot completo do SQLite. O CSV é uma exportação para consulta, não substitui o backup. Ele inclui as colunas `Recebido` e `Líquido recebido`, que zeram pedidos pendentes ou cancelados, e `Origem` e `Registrado em (UTC)`. O instante fica vazio nas linhas da planilha, pois o horário original é desconhecido.
 
@@ -109,7 +115,10 @@ O restaurador verifica a integridade e o formato do banco e recusa um destino qu
 
 Comece por [docs/README.md](docs/README.md). A sequência cobre domínio, arquitetura, dados, API, leitura do código e o desafio em Rust. Ela distingue o comportamento já implementado das etapas que ainda precisam ser validadas para a substituição da planilha.
 
-O projeto usa um repositório Git local, sem remote. O ciclo de commits está em [docs/08-git.md](docs/08-git.md); as instruções para alterações futuras estão em [AGENTS.md](AGENTS.md).
+Esta cópia foi clonada de `Luiz-AVcruz/Sistema-Con-Affetto` e mantém o remote
+de origem. As alterações são versionadas localmente; envio ao GitHub exige
+instrução explícita. O ciclo de commits está em [docs/08-git.md](docs/08-git.md);
+as instruções para alterações futuras estão em [AGENTS.md](AGENTS.md).
 
 ## Licença
 

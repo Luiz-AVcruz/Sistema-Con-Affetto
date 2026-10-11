@@ -652,12 +652,20 @@ fn show_startup_error(
         serde_json::to_string(message)?
     );
     WebviewWindowBuilder::new(app, "main", WebviewUrl::App("desktop-error.html".into()))
-        .title("Caixa da Feira")
+        .title(application_title())
         .inner_size(760.0, 420.0)
         .center()
         .initialization_script(script)
         .build()?;
     Ok(())
+}
+
+fn application_title() -> &'static str {
+    if std::env::var("CAIXA_NIGHTLY").as_deref() == Ok("1") {
+        "Caixa da Feira — Nightly"
+    } else {
+        "Caixa da Feira"
+    }
 }
 
 pub fn run() {
@@ -692,7 +700,7 @@ pub fn run() {
         let export_db = db.clone();
         let export_jobs = backend.export_jobs.clone();
         let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.clone()))
-            .title("Caixa da Feira")
+            .title(application_title())
             .inner_size(1180.0, 800.0)
             .maximized(true)
             .min_inner_size(900.0, 620.0)

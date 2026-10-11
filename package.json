@@ -21,6 +21,7 @@
     "desktop:dev": "npm run dev -w @caixa/desktop",
     "desktop:build": "npm run build -w @caixa/desktop",
     "desktop:install": "npm run install:local -w @caixa/desktop",
+    "nightly:install": "node scripts/nightly-install.mjs",
     "flatpak:build": "node scripts/flatpak-build.mjs",
     "flatpak:test": "node scripts/flatpak-runtime-smoke.mjs",
     "test:packaging": "node --test tests/packaging/*.test.mjs"
