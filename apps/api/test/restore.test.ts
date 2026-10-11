@@ -10,14 +10,14 @@ import Database from 'better-sqlite3';
 import { openDatabase, schemaVersion } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
 import { projectRoot } from '../src/paths.js';
-import { legacyDatabase, withoutFairId, withoutDeletedAt } from './legacy-database.js';
+import { legacyDatabase, legacyPaymentColumns, withoutPaymentColumns, withoutFairId, withoutDeletedAt } from './legacy-database.js';
 
 const tables = ['owners','products','sales','sale_items','days','stock_adjustments'];
 const rows = (db: Database.Database) => tables.map(table => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all() as Record<string, unknown>[]);
 const hash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const restore = (source: string, target: string) => spawnSync(process.execPath, [join(projectRoot, 'scripts/restaurar-backup.mjs'), source, target], { encoding: 'utf8' });
 
-for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
+for (const version of [1, 2, 3, 4, 5, 6] as const) test(`restaurador conserva backup e todos os registros (v${version} em WAL)`, () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-restauracao-'));
   let original: Database.Database | undefined, restored: Database.Database | undefined;
   try {
@@ -45,6 +45,7 @@ for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backu
     if (version >= 3) original.prepare('INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,source_sha256,imported_at,fair_id) VALUES(?,?,?,?,?,?,1)')
       .run('caixa-da-feira-ods', 'Vendas:6', 'hash da linha original', sale.id, 'sha original', new Date().toISOString());
     if (version < 4) legacyDatabase(original,version);
+    if (version === 4 || version === 5) legacyPaymentColumns(original);
     if (version === 4) original.exec('ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
     const expectedRecords = version >= 3 ? original.prepare('SELECT * FROM spreadsheet_records').all() : [];
     const expectedFairs = version >= 4 ? original.prepare('SELECT * FROM fairs').all() : null;
@@ -56,6 +57,7 @@ for (const version of [1, 2, 3, 4, 5] as const) test(`restaurador conserva backu
     assert.equal(restored.pragma('user_version', { simple: true }), schemaVersion);
     assert.equal(restored.pragma('integrity_check', { simple: true }), 'ok');
     const actual = rows(restored);
+    if (version < 6) for (let i=0;i<actual.length;i++) actual[i]=withoutPaymentColumns(actual[i]);
     if (version < 5) for (let i=0;i<actual.length;i++) actual[i]=withoutDeletedAt(actual[i]);
     if (version < 4) for (let i=0;i<actual.length;i++) actual[i]=withoutFairId(actual[i]);
     if (version === 1) actual[1] = actual[1].map(({ version, ...row }) => { assert.equal(version, 1); return row; });

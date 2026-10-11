@@ -21,6 +21,7 @@ test('histórico filtra o dia, ordena por valor/data e lembra as escolhas ao rea
   expect(productResponse.ok()).toBeTruthy();
   const product = await productResponse.json();
   const prefix = 'Ordenação teste: ';
+  let pendingId = '';
   const fixtures = [
     { name: 'Maior', date: selected, quantity: 12 },
     { name: 'Menor', date: selected, quantity: 1 },
@@ -39,6 +40,7 @@ test('histórico filtra o dia, ordena por valor/data e lembra as escolhas ao rea
     } });
     expect(response.ok(), await response.text()).toBeTruthy();
     const sale = await response.json();
+    if (fixture.name === 'Pendência anterior') pendingId = sale.id;
     if (fixture.name === 'Recebido no dia') {
       expect((await request.post(`/api/sales/${sale.id}/receive?fairId=${data.fair.id}`, {
         data: { date: selected, paymentMethod: 'Pix' }
@@ -81,6 +83,9 @@ test('histórico filtra o dia, ordena por valor/data e lembra as escolhas ao rea
   await reopened.getByRole('button', { name: 'Histórico', exact: true }).click();
   await expect(reopened.getByRole('checkbox', { name: 'Mostrar todos os dias' })).not.toBeChecked();
   await expect(reopened.getByRole('combobox', { name: 'Ordenar pedidos' })).toHaveValue('value-asc');
+  // O banco temporário é compartilhado: a pendência deste teste não deve impedir
+  // que o teste de encerramento valide sua própria feira.
+  expect((await request.post(`/api/sales/${pendingId}/cancel?fairId=${data.fair.id}`, { data: {} })).ok()).toBeTruthy();
 });
 
 test('preferências inválidas ou armazenamento indisponível não impedem consultar o histórico', async ({ page }) => {

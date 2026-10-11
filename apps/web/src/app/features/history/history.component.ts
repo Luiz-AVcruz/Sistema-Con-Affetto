@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { paymentMethods, type PaymentMethod, type Sale } from '@caixa/shared';
+import { paymentChoices, paymentChoiceValue, paymentLabel, type Sale } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, formatRegisteredAt } from '../../core/money';
 
@@ -24,8 +24,10 @@ export class HistoryComponent {
   readonly allDates = signal(this.preferences.allDates);
   readonly order = signal(this.preferences.order);
   readonly orderOptions = orderOptions;
-  readonly methods = paymentMethods.slice(0, 4);
-  readonly receiptMethods: Record<string, PaymentMethod> = {};
+  readonly methods = paymentChoices.filter(choice => choice.method !== 'Permuta' && choice.method !== 'Não cobrado');
+  readonly paymentLabel = paymentLabel;
+  readonly paymentChoiceValue = paymentChoiceValue;
+  readonly receiptMethods: Record<string, string> = {};
   readonly deleteConfirmation = signal<{ sale: Sale; fairId: number } | null>(null);
   readonly closedDates = computed(() => {
     const data = this.store.data();
@@ -99,6 +101,11 @@ export class HistoryComponent {
     }
     if (await this.store.deleteSale(confirmation.sale.id, confirmation.fairId)) this.deleteConfirmation.set(null);
   }
-  receive(sale: Sale) { return this.store.receive(sale.id, this.receiptMethods[sale.id] ?? sale.paymentMethod); }
+  receive(sale: Sale) {
+    const value = this.receiptMethods[sale.id] ?? paymentChoiceValue(sale.paymentMethod, sale.cardEntry);
+    const choice = this.methods.find(choice => choice.value === value);
+    if (!choice) return;
+    return this.store.receive(sale.id, choice.method, { automaticFees: true, ...('cardEntry' in choice ? { cardEntry: choice.cardEntry } : {}) });
+  }
   paymentClosed(sale: Sale): boolean { return (this.store.data()?.closedDays ?? []).some(day => day.date === sale.paymentDate); }
 }

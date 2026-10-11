@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import type { Summary } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, localDate, parseMoney } from '../../core/money';
 
@@ -45,6 +46,7 @@ export class FairsComponent {
   progress(netCents: number, targetCents: number | null): number {
     return targetCents === null ? 0 : Math.min(100, Math.floor(netCents * 100 / targetCents));
   }
+  companyNet(summary: Summary): number { return summary.byOwner.find(owner => owner.name === 'Con Affetto')?.netCents ?? 0; }
 
   async save(): Promise<void> {
     try {

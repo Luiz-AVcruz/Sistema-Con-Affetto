@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import type { Bootstrap, SaleInput, ProductInput, CashInput, PaymentMethod, Fair, FairInput } from '@caixa/shared';
+import type { Bootstrap, SaleInput, ProductInput, CashInput, PaymentMethod, PaymentOptions, Fair, FairInput } from '@caixa/shared';
 import { localDate } from './money';
 
 @Injectable({ providedIn: 'root' })
@@ -86,10 +86,10 @@ export class CashStore {
     return this.mutate(() => firstValueFrom(id ? this.http.put(`/api/products/${id}`, input) : this.http.post('/api/products', input)), 'Produto salvo.');
   }
   addOwner(name: string) { return this.mutate(() => firstValueFrom(this.http.post('/api/owners', { name })), 'Participante cadastrada.'); }
-  receive(id: string, paymentMethod: PaymentMethod) {
+  receive(id: string, paymentMethod: PaymentMethod, options: PaymentOptions = {}) {
     const fairId = this.data()?.fair.id;
     if (fairId === undefined || this.data()?.fair.closedAt) { this.error.set('Esta feira está encerrada e não aceita recebimentos.'); return Promise.resolve(false); }
-    return this.mutate(() => firstValueFrom(this.http.post(`/api/sales/${id}/receive`, { date: this.date(), paymentMethod }, { params: { fairId } })), 'Pagamento recebido na data selecionada.');
+    return this.mutate(() => firstValueFrom(this.http.post(`/api/sales/${id}/receive`, { date: this.date(), paymentMethod, ...options }, { params: { fairId } })), 'Pagamento recebido na data selecionada.');
   }
   cancel(id: string) {
     const fairId = this.data()?.fair.id;

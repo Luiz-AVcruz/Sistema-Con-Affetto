@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('histórico importado, horário e fluxo de venda, recebimento, cancelamento e fechamento', async ({ page, request }, testInfo) => {
-  const ownerA = await (await request.post('/api/owners', { data: { name: 'Participante A' } })).json();
+  const ownerA = await (await request.post('/api/owners', { data: { name: 'Con Affetto' } })).json();
   const ownerB = await (await request.post('/api/owners', { data: { name: 'Participante B' } })).json();
   for (const product of [{ name: 'Pipoca', ownerId: ownerA.id, priceCents: 1500, stock: 10 }, { name: 'Caneca', ownerId: ownerB.id, priceCents: 4000, stock: 3 }]) {
     expect((await request.post('/api/products', { data: { ...product, description: '', active: true } })).ok()).toBeTruthy();
@@ -114,10 +114,11 @@ test('histórico importado, horário e fluxo de venda, recebimento, cancelamento
   await expect(page.locator('.history-order').filter({ hasText: 'Caneca' }).getByRole('button', { name: 'Excluir pedido', exact: true })).toBeDisabled();
   await page.getByRole('button',{name:'Feiras',exact:true}).click();
   await page.getByRole('textbox',{name:'Nome da feira',exact:true}).fill('Feira de teste');
-  await page.getByRole('textbox',{name:'Meta financeira (R$)',exact:true}).fill('100,00');
+  await page.getByRole('textbox',{name:'Meta da Con Affetto (R$)',exact:true}).fill('100,00');
   await page.getByRole('button',{name:'Salvar nome e meta',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Meta da feira salva'})).toBeVisible();
-  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow','95');
+  await expect(page.getByTestId('company-net')).toContainText('30,00');
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow','30');
   await page.screenshot({path:testInfo.outputPath('meta-feira.png'),fullPage:true});
   page.once('dialog',dialog=>dialog.accept());
   await page.getByRole('button',{name:'Encerrar feira',exact:true}).click();

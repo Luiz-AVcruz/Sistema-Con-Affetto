@@ -4,13 +4,15 @@ O programa mantém uma feira em andamento por vez. Cada feira tem nome, data ini
 
 ## Uso
 
-Na seção **Feiras**, informe um nome e, se quiser, uma meta em reais. O progresso usa o **líquido recebido**, depois das taxas. Pedidos pendentes, cancelados, permutas e brindes não acrescentam dinheiro à meta. Deixar a meta vazia remove somente a meta; os valores registrados continuam iguais.
+Na seção **Feiras**, informe um nome e, se quiser, uma meta em reais. A meta pertence à **Con Affetto**: o progresso usa somente o **líquido recebido por ela**, depois das taxas dos seus itens, inclusive retificações registradas. Os valores dos outros participantes aparecem no total geral e nos repasses, mas não entram na meta. Pedidos pendentes, cancelados, permutas e brindes não acrescentam dinheiro à meta. Deixar a meta vazia remove somente a meta; os valores registrados continuam iguais.
+
+No **Fechamento**, cada participante tem **bruto recebido**, **taxas** e **líquido** separados, no dia e no acumulado da feira. O bruto é o que foi cobrado depois dos descontos, antes das taxas. Cada participante arca somente com a parte da taxa correspondente aos seus itens. Consulte [pagamentos e retificações](14-pagamentos.md).
 
 **Fechar dia** guarda a conferência daquele dia. **Encerrar feira** guarda o resumo definitivo do evento inteiro. São operações distintas. Antes de encerrar a feira, receba ou cancele todos os pedidos pendentes, inclusive pedidos cujo valor seja zero. A data de encerramento não pode preceder pedidos, recebimentos ou conferências já registrados.
 
 Ao encerrar, os dias ainda abertos são fechados com as conferências **já salvas**. A contagem física continua opcional: ausência de contagem não é zero contado. Os snapshots de dias já fechados permanecem intactos. Valores digitados em um formulário e ainda não salvos não participam desse procedimento.
 
-A feira encerrada fica disponível para consulta. Seus pedidos, recebimentos, metas e fechamentos não podem ser alterados. Uma correção financeira posterior exige um procedimento específico, ainda não implementado; não se deve editar o SQLite manualmente.
+A feira encerrada fica disponível para consulta. Seus pedidos, recebimentos, metas e fechamentos não podem ser alterados. A retificação de taxas dos cartões anteriores é um procedimento específico para uma feira ainda ativa, com backup e trilha própria; conserva os fechamentos originais e apresenta o líquido ajustado separadamente. Outras correções financeiras posteriores continuam exigindo um procedimento específico; não se deve editar o SQLite manualmente.
 
 Quando não houver feira ativa, use **Iniciar próxima feira**. É permitido encerrar uma feira e iniciar outra na mesma data: os dias são identificados pelo par `(fair_id, date)`, portanto o fechamento anterior não bloqueia o novo caixa. A nova data inicial precisa ser igual ou posterior ao encerramento da feira anterior.
 
@@ -29,7 +31,7 @@ Os CSVs usam UTF-8 com BOM, ponto e vírgula e vírgula decimal, para abertura n
 
 O esquema v4 cria a **Feira atual** e vincula todos os registros anteriores a ela. A data inicial é a menor data existente. As tabelas de dias e origens importadas são reconstruídas com a identificação da feira; preços, participantes, hashes de reenvio, saldos e snapshots não são recalculados. A migração usa transação e confere referências antes de confirmar.
 
-O restaurador aceita bancos v1, v2, v3 e v4. Ele valida e migra somente uma cópia, recusando destino existente ou com arquivos auxiliares. O backup original permanece disponível.
+O restaurador aceita bancos v1 a v6. Ele valida e migra somente uma cópia, recusando destino existente ou com arquivos auxiliares. O backup original permanece disponível. O esquema v6 acrescenta a identificação da leitura do cartão, o cálculo automático e a trilha de retificação de taxas. Não reescreve os valores financeiros anteriores nem os snapshots.
 
 O histórico do ODS precisa ser migrado antes de encerrar a primeira feira ou criar outra. Caso a planilha tenha recebido vendas desde o seed, a conciliação inicial explícita usa seu saldo salvo e desconta os pedidos pagos no aplicativo. A conferência padrão considera os ajustes já registrados, mas a conciliação automática de divergências é recusada em produtos com contagem manual: ela pode já incluir as vendas novas da planilha. Mudanças permitidas de saldo incrementam a versão do produto e ficam registradas. A importação nunca lança as vendas antigas como novas saídas de estoque.
 

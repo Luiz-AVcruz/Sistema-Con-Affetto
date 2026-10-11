@@ -1,11 +1,11 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { paymentMethods, type PaymentMethod, type Product, type SaleInput } from '@caixa/shared';
+import { calculatePaymentFees, paymentChoices, paymentChoiceValue, paymentMethods, paymentRate, type CardEntry, type PaymentMethod, type Product, type SaleInput } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, parseMoney } from '../../core/money';
 
 interface CartItem { product: Product; quantity: number; discount: string; fee: string }
-interface Draft { version: 2; fairId: number; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string; catalogExpectations?: boolean; pendingSubmission?: SaleInput }
+interface Draft { version: 2; fairId: number; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string; catalogExpectations?: boolean; pendingSubmission?: SaleInput; automaticFees?: boolean; cardEntry?: CardEntry | null }
 interface LegacyDraft { version: 1; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string }
 const legacyDraftKey = 'caixa-feira-draft-v1';
 const draftKey = (fairId: number) => `caixa-feira-draft-v2-${fairId}`;
@@ -15,7 +15,7 @@ export class SalesComponent {
   readonly store = inject(CashStore);
   readonly money = formatMoney;
   readonly dayLabel = formatDay;
-  readonly methods = paymentMethods;
+  readonly methods = paymentChoices;
   readonly search = signal('');
   readonly cart = signal<CartItem[]>([]);
   readonly pendingSubmission = signal<SaleInput | null>(null);
@@ -29,6 +29,8 @@ export class SalesComponent {
     return (this.store.data()?.products ?? []).filter(product => product.active && `${product.name} ${product.ownerName}`.toLocaleLowerCase('pt-BR').includes(query));
   });
   method: PaymentMethod = 'Dinheiro';
+  automaticFees = true;
+  cardEntry: CardEntry | null = null;
   status: 'Pago' | 'Pendente' = 'Pago';
   note = '';
   draftDate = this.store.date();
@@ -52,7 +54,9 @@ export class SalesComponent {
     return (draft.version === 1 || draft.version === 2) && Array.isArray(draft.items) && draft.items.every(item => item && item.product && Number.isInteger(item.product.id) && Number.isInteger(item.quantity) && item.quantity > 0 && typeof item.discount === 'string' && typeof item.fee === 'string') && paymentMethods.includes(draft.method as PaymentMethod) && ['Pago', 'Pendente'].includes(draft.status ?? '') && typeof draft.requestId === 'string' && typeof draft.date === 'string' && typeof draft.note === 'string' && (draft.version === 1 || Number.isInteger(draft.fairId))
       && (frozen === undefined || frozen && frozen.requestId === draft.requestId && frozen.fairId === draft.fairId
         && frozen.date === draft.date && paymentMethods.includes(frozen.paymentMethod) && ['Pago', 'Pendente'].includes(frozen.status)
-        && typeof frozen.note === 'string' && Array.isArray(frozen.items) && frozen.items.length > 0);
+        && typeof frozen.note === 'string' && Array.isArray(frozen.items) && frozen.items.length > 0)
+      && (draft.automaticFees === undefined || typeof draft.automaticFees === 'boolean')
+      && (draft.cardEntry === undefined || draft.cardEntry === null || draft.cardEntry === 'Aproximação' || draft.cardEntry === 'Inserido');
   }
 
   private loadDraft(fairId: number, oldestFairId: number): void {
@@ -66,6 +70,8 @@ export class SalesComponent {
         this.note = draft.note; this.requestId = draft.requestId; this.draftDate = draft.date;
         this.catalogExpectations = draft.catalogExpectations === true;
         this.pendingSubmission.set(draft.pendingSubmission ?? null);
+        this.automaticFees = draft.automaticFees === true || !draft.items.length && !draft.pendingSubmission;
+        this.cardEntry = draft.cardEntry ?? null;
       } else if (fairId === oldestFairId) {
         const legacy = localStorage.getItem(legacyDraftKey);
         if (legacy) {
@@ -77,6 +83,7 @@ export class SalesComponent {
           this.cart.set(migrated.items); this.method = migrated.method; this.status = migrated.status;
           this.note = migrated.note; this.requestId = migrated.requestId; this.draftDate = migrated.date;
           this.catalogExpectations = false; this.pendingSubmission.set(null);
+          this.automaticFees = !migrated.items.length; this.cardEntry = null;
         } else this.resetEmptyDraft();
       } else this.resetEmptyDraft();
       // Um rascunho antigo pode ser um POST confirmado cuja resposta se perdeu.
@@ -93,6 +100,7 @@ export class SalesComponent {
   private resetEmptyDraft(): void {
     this.cart.set([]); this.requestId = crypto.randomUUID(); this.note = ''; this.method = 'Dinheiro'; this.status = 'Pago'; this.draftDate = this.store.date();
     this.catalogExpectations = true; this.pendingSubmission.set(null);
+    this.automaticFees = true; this.cardEntry = null;
   }
 
   persist(): boolean {
@@ -100,6 +108,7 @@ export class SalesComponent {
     if (fairId === null) return false;
     try {
       const draft: Draft = { version: 2, fairId, requestId: this.requestId, date: this.draftDate, items: this.cart(), method: this.method, status: this.status, note: this.note,
+        automaticFees: this.automaticFees, cardEntry: this.cardEntry,
         catalogExpectations: this.catalogExpectations, ...(this.pendingSubmission() ? { pendingSubmission: this.pendingSubmission()! } : {}) };
       localStorage.setItem(draftKey(fairId), JSON.stringify(draft));
       return true;
@@ -109,7 +118,7 @@ export class SalesComponent {
   add(product: Product): void {
     if (this.store.busy() || this.pendingSubmission() || this.store.data()?.fair.closedAt || this.store.data()?.day.closedAt) return;
     if (this.cart().length && this.draftDate !== this.store.date()) { this.store.error.set('O rascunho pertence a outro dia. Selecione essa data ou limpe o pedido.'); return; }
-    if (!this.cart().length) this.draftDate = this.store.date();
+    if (!this.cart().length) { this.draftDate = this.store.date(); this.automaticFees = true; }
     const existing = this.cart().find(item => item.product.id === product.id);
     if (product.stock !== null && product.stock < (existing?.quantity ?? 0) + 1) { this.store.error.set('Quantidade maior que o estoque disponível.'); return; }
     this.cart.update(items => existing ? items.map(item => item === existing ? { ...item, quantity: item.quantity + 1 } : item) : [...items, { product, quantity: 1, discount: '', fee: '' }]);
@@ -121,20 +130,39 @@ export class SalesComponent {
     this.cart.update(items => items.map(item => item.product.id === id ? { ...item, [field]: value } : item));
     this.persist();
   }
-  remove(id: number): void { if (this.pendingSubmission()) return; this.cart.update(items => items.filter(item => item.product.id !== id)); this.persist(); }
+  remove(id: number): void {
+    if (this.pendingSubmission()) return;
+    this.cart.update(items => items.filter(item => item.product.id !== id));
+    if (!this.cart().length) this.automaticFees = true;
+    this.persist();
+  }
   clear(): void {
     if (this.pendingSubmission()) return;
     this.resetEmptyDraft();
     this.persist();
   }
   nonCash(): boolean { return this.method === 'Permuta' || this.method === 'Não cobrado'; }
-  setMethod(value: PaymentMethod): void {
+  get paymentChoice(): string { return paymentChoiceValue(this.method, this.cardEntry); }
+  setMethod(value: string): void {
     if (this.pendingSubmission()) return;
-    this.method = value;
+    const choice = paymentChoices.find(choice => choice.value === value);
+    if (!choice) return;
+    if (!this.automaticFees) {
+      this.automaticFees = true;
+      this.cart.update(items => items.map(item => ({ ...item, fee: '' })));
+    }
+    this.method = choice.method;
+    this.cardEntry = 'cardEntry' in choice ? choice.cardEntry : null;
     if (this.nonCash()) {
       this.status = 'Pago';
       this.cart.update(items => items.map(item => ({ ...item, discount: '', fee: '' })));
     }
+    this.persist();
+  }
+  enableAutomaticFees(): void {
+    if (this.store.busy() || this.pendingSubmission()) return;
+    this.automaticFees = true;
+    this.cart.update(items => items.map(item => ({ ...item, fee: '' })));
     this.persist();
   }
   updateCatalog(): void {
@@ -150,9 +178,10 @@ export class SalesComponent {
   private saleInput(fairId: number): SaleInput {
     return { fairId, requestId: this.requestId, date: this.draftDate,
       paymentMethod: this.method, status: this.status, note: this.note,
+      ...(this.automaticFees ? { automaticFees: true as const, ...(this.method.startsWith('Cartão') ? { cardEntry: this.cardEntry ?? 'Aproximação' as const } : {}) } : {}),
       items: this.cart().map(item => ({ productId: item.product.id, quantity: item.quantity, expectedPriceCents: item.product.priceCents,
         ...(this.catalogExpectations ? { expectedName: item.product.name, expectedOwnerId: item.product.ownerId, expectedOwnerName: item.product.ownerName } : {}),
-        discountCents: parseMoney(item.discount), feeCents: parseMoney(item.fee) })) };
+        discountCents: parseMoney(item.discount), feeCents: this.automaticFees ? 0 : parseMoney(item.fee) })) };
   }
   quote(): number | null {
     try {
@@ -164,6 +193,19 @@ export class SalesComponent {
       }, 0);
     } catch { return null; }
   }
+  feeQuote(): number | null {
+    try {
+      if (this.quote() === null) return null;
+      if (!this.automaticFees) return this.cart().reduce((sum, item) => sum + parseMoney(item.fee), 0);
+      const amounts = this.cart().map(item => this.nonCash() ? 0 : item.product.priceCents * item.quantity - parseMoney(item.discount));
+      return calculatePaymentFees(amounts, this.method, this.cardEntry).reduce((sum, fee) => sum + fee, 0);
+    } catch { return null; }
+  }
+  netQuote(): number | null {
+    const total = this.quote(), fee = this.feeQuote();
+    return total === null || fee === null ? null : total - fee;
+  }
+  rateLabel(): string { return (paymentRate(this.method, this.cardEntry) / 100).toFixed(2).replace('.', ',') + '%'; }
   async submit(): Promise<void> {
     if (this.store.busy()) return;
     const fairId = this.store.data()?.fair.id;

@@ -3,17 +3,17 @@
     <div class="section-heading"><div><h2>Feiras</h2><span>Histórico, metas e encerramentos</span></div><div class="fair-status" [class.archived-status]="!!data.fair.closedAt">{{ data.fair.closedAt ? 'Feira encerrada' : 'Feira ativa' }}</div></div>
     <div class="fair-summary">
       <div><span>Feira selecionada</span><strong>{{ data.fair.name }}</strong><small>{{ dayLabel(data.fair.startDate) }}{{ data.fair.endDate ? ' a ' + dayLabel(data.fair.endDate) : ' · em andamento' }}</small></div>
-      <div><span>Líquido recebido</span><strong>{{ money(data.fair.summary.netCents) }}</strong><small>{{ data.fair.summary.paidCount }} pedidos pagos</small></div>
-      <div><span>Meta</span><strong>{{ data.fair.targetCents === null ? 'Sem meta' : money(data.fair.targetCents) }}</strong><small>{{ data.fair.targetCents === null ? 'Você pode definir uma meta.' : progress(data.fair.summary.netCents, data.fair.targetCents) + '% atingidos' }}</small></div>
+      <div><span>Líquido da Con Affetto</span><strong data-testid="company-net">{{ money(companyNet(data.fair.summary)) }}</strong><small>Total líquido da feira: {{ money(data.fair.summary.netCents) }} · {{ data.fair.summary.paidCount }} pedidos pagos</small></div>
+      <div><span>Meta da Con Affetto</span><strong>{{ data.fair.targetCents === null ? 'Sem meta' : money(data.fair.targetCents) }}</strong><small>{{ data.fair.targetCents === null ? 'Você pode definir uma meta.' : progress(companyNet(data.fair.summary), data.fair.targetCents) + '% atingidos' }}</small></div>
     </div>
-    @if (data.fair.targetCents !== null) { <div class="progress-track" role="progressbar" [attr.aria-valuenow]="progress(data.fair.summary.netCents, data.fair.targetCents)" aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="'Meta atingida: ' + progress(data.fair.summary.netCents, data.fair.targetCents) + '%'" ><span [style.width.%]="progress(data.fair.summary.netCents, data.fair.targetCents)"></span></div> }
+    @if (data.fair.targetCents !== null) { <div class="progress-track" role="progressbar" [attr.aria-valuenow]="progress(companyNet(data.fair.summary), data.fair.targetCents)" aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="'Meta da Con Affetto atingida: ' + progress(companyNet(data.fair.summary), data.fair.targetCents) + '%'" ><span [style.width.%]="progress(companyNet(data.fair.summary), data.fair.targetCents)"></span></div> }
   </section>
 
   @if (!data.fair.closedAt) {
     <section class="panel spaced">
-      <h2>Meta da feira ativa</h2>
-      <p class="muted">O progresso considera o valor líquido já recebido. Pedido pendente não conta até ser recebido.</p>
-      <form (ngSubmit)="save()"><div class="form-row"><label>Nome da feira<input name="editFairName" [(ngModel)]="editName" maxlength="100" required [disabled]="store.busy()"></label><label>Meta financeira (R$)<input name="editFairTarget" [(ngModel)]="editTarget" inputmode="decimal" placeholder="Deixe vazio para não definir" [disabled]="store.busy()"></label></div><button class="secondary" type="submit" [disabled]="store.busy() || !editName.trim()">Salvar nome e meta</button></form>
+      <h2>Meta da Con Affetto nesta feira</h2>
+      <p class="muted">O progresso considera somente o líquido recebido pela Con Affetto, depois das taxas. Cada participante arca com a taxa dos seus produtos. Pedidos pendentes não contam até o recebimento.</p>
+      <form (ngSubmit)="save()"><div class="form-row"><label>Nome da feira<input name="editFairName" [(ngModel)]="editName" maxlength="100" required [disabled]="store.busy()"></label><label>Meta da Con Affetto (R$)<input name="editFairTarget" [(ngModel)]="editTarget" inputmode="decimal" placeholder="Deixe vazio para não definir" [disabled]="store.busy()"></label></div><button class="secondary" type="submit" [disabled]="store.busy() || !editName.trim()">Salvar nome e meta</button></form>
       <div class="fair-close-row"><label>Data de encerramento<input name="closeFairDate" type="date" [(ngModel)]="closeDate" [min]="latestFairDate()" max="2100-12-31" [disabled]="store.busy()"></label><div><p class="muted">{{ pendingCount() ? pendingCount() + ' pedido(s) pendente(s) precisam ser recebidos ou cancelados.' : 'A feira pode ser encerrada. Será gravado um resumo definitivo.' }}</p><button type="button" class="cancel-order" (click)="close()" [disabled]="store.busy() || pendingCount() > 0">Encerrar feira</button></div></div>
     </section>
   } @else {
@@ -22,15 +22,15 @@
 
   <section class="panel spaced">
     <div class="section-heading"><div><h2>Feiras anteriores</h2><span>Os resumos ficam guardados no caixa.</span></div><a class="secondary" href="/api/export/fairs.csv" download>Exportar todas</a></div>
-    <div class="table-wrap"><table><thead><tr><th>Feira</th><th>Período</th><th>Meta</th><th class="number">Líquido recebido</th><th class="number">Pedidos pagos</th><th>Situação</th><th></th></tr></thead><tbody>
-      @for (fair of data.fairs; track fair.id) { <tr><td>{{ fair.name }}</td><td>{{ dayLabel(fair.startDate) }}{{ fair.endDate ? ' a ' + dayLabel(fair.endDate) : '' }}</td><td>{{ fair.targetCents === null ? '—' : money(fair.targetCents) }}</td><td class="number">{{ money(fair.summary.netCents) }}</td><td class="number">{{ fair.summary.paidCount }}</td><td>{{ fair.closedAt ? 'Encerrada' : 'Ativa' }}</td><td><button class="text-button" type="button" (click)="store.selectFair(fair.id)" [disabled]="store.busy() || data.fair.id === fair.id">{{ data.fair.id === fair.id ? 'Selecionada' : 'Consultar' }}</button></td></tr> }
+    <div class="table-wrap"><table><thead><tr><th>Feira</th><th>Período</th><th>Meta da Con Affetto</th><th class="number">Líquido Con Affetto</th><th class="number">Líquido total</th><th class="number">Pedidos pagos</th><th>Situação</th><th></th></tr></thead><tbody>
+      @for (fair of data.fairs; track fair.id) { <tr><td>{{ fair.name }}</td><td>{{ dayLabel(fair.startDate) }}{{ fair.endDate ? ' a ' + dayLabel(fair.endDate) : '' }}</td><td>{{ fair.targetCents === null ? '—' : money(fair.targetCents) }}</td><td class="number">{{ money(companyNet(fair.summary)) }}</td><td class="number">{{ money(fair.summary.netCents) }}</td><td class="number">{{ fair.summary.paidCount }}</td><td>{{ fair.closedAt ? 'Encerrada' : 'Ativa' }}</td><td><button class="text-button" type="button" (click)="store.selectFair(fair.id)" [disabled]="store.busy() || data.fair.id === fair.id">{{ data.fair.id === fair.id ? 'Selecionada' : 'Consultar' }}</button></td></tr> }
     </tbody></table></div>
   </section>
 
   @if (activeFairId() === null) {
     <section class="panel spaced">
       <h2>Iniciar próxima feira</h2><p class="muted">O catálogo e o estoque continuam os mesmos. Pedidos e fechamento começam vazios, com histórico separado.</p>
-      <form (ngSubmit)="create()"><div class="form-row"><label>Nome<input name="newFairName" [(ngModel)]="newName" maxlength="100" required [disabled]="store.busy()" placeholder="Ex.: Feira de novembro"></label><label>Meta (R$)<input name="newFairTarget" [(ngModel)]="newTarget" inputmode="decimal" placeholder="Opcional" [disabled]="store.busy()"></label><label>Data inicial<input name="newFairStart" type="date" [(ngModel)]="newStartDate" min="2020-01-01" max="2100-12-31" required [disabled]="store.busy()"></label></div><button class="primary" type="submit" [disabled]="store.busy() || !newName.trim() || !newStartDate">Criar feira e começar</button></form>
+      <form (ngSubmit)="create()"><div class="form-row"><label>Nome<input name="newFairName" [(ngModel)]="newName" maxlength="100" required [disabled]="store.busy()" placeholder="Ex.: Feira de novembro"></label><label>Meta da Con Affetto (R$)<input name="newFairTarget" [(ngModel)]="newTarget" inputmode="decimal" placeholder="Opcional" [disabled]="store.busy()"></label><label>Data inicial<input name="newFairStart" type="date" [(ngModel)]="newStartDate" min="2020-01-01" max="2100-12-31" required [disabled]="store.busy()"></label></div><button class="primary" type="submit" [disabled]="store.busy() || !newName.trim() || !newStartDate">Criar feira e começar</button></form>
     </section>
   }
 }

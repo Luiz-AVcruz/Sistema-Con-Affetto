@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 
 // Produz as estruturas efetivamente publicadas; mudar só user_version não prova migração.
 export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVersion = version !== 1): void {
+  legacyPaymentColumns(db);
   const records = db.prepare('SELECT * FROM spreadsheet_records').all() as Record<string, unknown>[];
   db.pragma('foreign_keys = OFF');
   try {
@@ -26,8 +27,19 @@ export function legacyDatabase(db: Database.Database, version: 1 | 2 | 3, keepVe
   } finally { db.pragma('foreign_keys = ON'); }
 }
 
+export function legacyPaymentColumns(db: Database.Database): void {
+  db.exec('DROP TABLE payment_fee_corrections; ALTER TABLE sales DROP COLUMN automatic_fees; ALTER TABLE sales DROP COLUMN card_entry; PRAGMA user_version = 5;');
+}
+
+export function withoutPaymentColumns(rows: Record<string, unknown>[]) {
+  return rows.map(({ automatic_fees, card_entry, ...row }) => {
+    if (automatic_fees !== undefined && automatic_fees !== 0 || card_entry !== undefined && card_entry !== null) throw new Error('A migração alterou o pagamento existente.');
+    return row;
+  });
+}
+
 export function withoutFairId(rows: Record<string, unknown>[]) {
-  return withoutDeletedAt(rows).map(({ fair_id, ...row }) => { if (fair_id !== undefined) {
+  return withoutPaymentColumns(withoutDeletedAt(rows)).map(({ fair_id, ...row }) => { if (fair_id !== undefined) {
     if (fair_id !== 1) throw new Error('Registro antigo associado à feira incorreta.');
   } return row; });
 }

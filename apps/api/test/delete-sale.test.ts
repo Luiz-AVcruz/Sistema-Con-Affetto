@@ -10,7 +10,7 @@ import Database from 'better-sqlite3';
 import { openDatabase, schemaVersion } from '../src/database.js';
 import { CashRegister } from '../src/cash-register.js';
 import { createApp } from '../src/app.js';
-import { withoutDeletedAt } from './legacy-database.js';
+import { legacyPaymentColumns, withoutPaymentColumns, withoutDeletedAt } from './legacy-database.js';
 
 const date = '2026-10-10';
 const cash = { openingCents: 0, extraCents: 0, withdrawalCents: 0, countedCents: null, note: '' };
@@ -133,7 +133,7 @@ test('exclusão não atravessa feiras; feira encerrada preserva os pedidos e ret
   } finally { db.close(); }
 });
 
-test('migração v4 acrescenta somente marcador vazio e preserva todas as tabelas e snapshots', () => {
+test('migração v4 acrescenta marcadores vazios e preserva todas as tabelas e snapshots', () => {
   const folder = mkdtempSync(join(tmpdir(), 'caixa-exclusao-v4-')), path = join(folder, 'old.sqlite');
   let db: Database.Database | undefined;
   try {
@@ -142,11 +142,12 @@ test('migração v4 acrescenta somente marcador vazio e preserva todas as tabela
     data.register.closeDay(date, cash);
     db.prepare('INSERT INTO spreadsheet_records(source_key,record_key,payload_hash,sale_id,source_sha256,imported_at,fair_id) VALUES(?,?,?,?,?,?,1)')
       .run('caixa-da-feira-ods', 'Vendas:6', 'hash original', sale.id, 'origem', new Date().toISOString());
+    legacyPaymentColumns(db);
     db.exec('ALTER TABLE sales DROP COLUMN deleted_at; PRAGMA user_version = 4');
     const before = rows(db);
     db.close(); db = openDatabase(path);
     assert.equal(db.pragma('user_version', { simple: true }), schemaVersion);
-    assert.deepEqual(rows(db).map(withoutDeletedAt), before);
+    assert.deepEqual(rows(db).map(withoutDeletedAt).map(withoutPaymentColumns), before);
     assert.deepEqual(db.pragma('foreign_key_check'), []);
     assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
     const after = rows(db); db.close(); db = openDatabase(path); assert.deepEqual(rows(db), after);

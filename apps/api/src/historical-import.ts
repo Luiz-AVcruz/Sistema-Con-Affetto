@@ -134,6 +134,7 @@ export function importHistory(db: Database.Database, untrustedInput: unknown, op
       const sum = (key: 'grossCents' | 'discountCents' | 'feeCents' | 'totalCents' | 'netCents') => items.reduce((total, item) => total + item[key], 0);
       const sale: Sale = { id: randomUUID(), fairId: register.fairId, date: first.date, paymentDate: first.status === 'Pago' ? first.date : null,
         paymentMethod: first.paymentMethod, status: first.status, note, createdAt: importedAt, origin: 'Planilha', items,
+        automaticFees: false, cardEntry: null, feeCorrected: false,
         grossCents: sum('grossCents'), discountCents: sum('discountCents'), feeCents: sum('feeCents'), totalCents: sum('totalCents'), netCents: sum('netCents') };
       db.prepare('INSERT INTO sales(id,request_hash,date,payment_date,payment_method,status,note,created_at,fair_id) VALUES(?,?,?,?,?,?,?,?,?)')
         .run(sale.id, hash(rows), sale.date, sale.paymentDate, sale.paymentMethod, sale.status, sale.note, importedAt, register.fairId);
@@ -150,7 +151,9 @@ export function importHistory(db: Database.Database, untrustedInput: unknown, op
       const differenceCents = closing.cash.countedCents === null ? null : closing.cash.countedCents - expectedCents;
       requireCondition(closing.expectedCents === null || closing.expectedCents === expectedCents, `Dinheiro esperado divergente em ${closing.date}.`);
       requireCondition(closing.differenceCents === null || closing.differenceCents === differenceCents, `Contagem divergente em ${closing.date}.`);
-      const day: Day = { ...closing.cash, date: closing.date, summary, expectedCents, differenceCents, closedAt: importedAt };
+      const throughId = register.latestFeeCorrectionId();
+      const day: Day = { ...closing.cash, date: closing.date, summary, expectedCents, differenceCents, closedAt: importedAt,
+        ...(throughId ? { feeCorrectionsThroughId: throughId } : {}) };
       db.prepare('INSERT INTO days(fair_id,date,opening_cents,extra_cents,withdrawal_cents,counted_cents,note,closed_at,snapshot) VALUES(?,?,?,?,?,?,?,?,?)')
         .run(register.fairId, day.date, day.openingCents, day.extraCents, day.withdrawalCents, day.countedCents, day.note, importedAt, JSON.stringify(day));
       insertRecord.run(input.sourceKey, `Histórico:${day.date}`, hash(closing), null, day.date, input.sha256, importedAt, register.fairId);

@@ -8,6 +8,8 @@ O Tauri abre uma janela própria e gerencia o backend local. A interface web per
 
 Registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelamentos, exclusão de lançamentos acidentais, estoque conhecido ou `A contar`, descontos/taxas por item, fechamento diário, meta e encerramento de feiras, histórico de eventos, exportação CSV e backup SQLite.
 
+Nesta feira, a meta considera o **líquido da Con Affetto**. Cartões por aproximação no celular e inseridos na maquininha têm taxas automáticas distintas; dinheiro e Pix têm taxa zero. Cada participante tem bruto, taxas e líquido separados e arca com sua parte da taxa. Consulte [pagamentos e retificações](docs/14-pagamentos.md).
+
 No **Histórico**, **Cancelar pedido** mantém o registro como cancelado. **Excluir pedido** pede confirmação e retira um lançamento acidental do histórico, dos totais e dos CSVs. Se estava pago, devolve as quantidades ao estoque; pendentes ou já cancelados não provocam nova devolução. Não é permitido excluir pedidos de feira encerrada nem com dia do pedido ou recebimento fechado. O backup completo mantém os registros internos de exclusão para impedir reenvios ou reimportações que recriem o lançamento.
 
 O catálogo, os pedidos e os fechamentos podem ser extraídos da última versão **salva** da planilha. A migração inicial preserva pedidos já feitos no aplicativo e não baixa novamente o estoque das vendas antigas. O histórico começa na data selecionada e lembra a última escolha de período e ordenação neste dispositivo. Pedidos do aplicativo mostram data e hora de registro; pedidos da planilha indicam que o horário não foi registrado na origem.

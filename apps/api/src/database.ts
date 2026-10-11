@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const schemaVersion = 5;
+export const schemaVersion = 6;
 
 export function openDatabase(path: string): Database.Database {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -109,6 +109,17 @@ export function openDatabase(path: string): Database.Database {
       // O marcador mantém a chave de reenvio e os vínculos da importação.
       // Nenhum pedido existente é excluído durante a migração.
       db.exec('ALTER TABLE sales ADD COLUMN deleted_at TEXT; PRAGMA user_version = 5;');
+    }).immediate();
+    if (version < 6) db.transaction(() => {
+      db.exec(`ALTER TABLE sales ADD COLUMN automatic_fees INTEGER NOT NULL DEFAULT 0 CHECK(automatic_fees IN (0,1));
+        ALTER TABLE sales ADD COLUMN card_entry TEXT CHECK(card_entry IS NULL OR card_entry IN ('Aproximação','Inserido'));
+        CREATE TABLE payment_fee_corrections (
+          id INTEGER PRIMARY KEY, sale_item_id INTEGER NOT NULL UNIQUE REFERENCES sale_items(id),
+          previous_fee_cents INTEGER NOT NULL CHECK(previous_fee_cents >= 0),
+          corrected_fee_cents INTEGER NOT NULL CHECK(corrected_fee_cents >= 0),
+          card_entry TEXT NOT NULL CHECK(card_entry IN ('Aproximação','Inserido')),
+          reason TEXT NOT NULL, created_at TEXT NOT NULL
+        ); PRAGMA user_version = 6;`);
     }).immediate();
     return db;
   } catch (error) { db.close(); throw error; }

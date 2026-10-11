@@ -54,7 +54,7 @@ export function createApp(register: CashRegister, frontend?: string) {
   });
   app.post('/api/sales/:id/receive', (req, res) => {
     const input = receiveSchema.parse(req.body);
-    res.json(context(req.query['fairId']).receiveSale(z.uuid().parse(req.params['id']), input.date, input.paymentMethod));
+    res.json(context(req.query['fairId']).receiveSale(z.uuid().parse(req.params['id']), input.date, input.paymentMethod, input));
   });
   app.post('/api/sales/:id/cancel', (req, res) => res.json(context(req.query['fairId']).cancelSale(z.uuid().parse(req.params['id']))));
   app.delete('/api/sales/:id', (req, res) => {
@@ -64,12 +64,12 @@ export function createApp(register: CashRegister, frontend?: string) {
   app.put('/api/days/:date', (req, res) => res.json(context(req.query['fairId']).saveDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.post('/api/days/:date/close', (req, res) => res.json(context(req.query['fairId']).closeDay(businessDate.parse(req.params['date']), cashSchema.parse(req.body))));
   app.get('/api/export/sales.csv', (req, res) => {
-    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação', 'Registrado em (UTC)', 'Origem', 'Feira ID', 'Feira'];
+    const header = ['Pedido', 'Data do pedido', 'Data do recebimento', 'Situação', 'Pagamento', 'Produto', 'Participante', 'Quantidade', 'Preço unitário', 'Desconto', 'Taxa', 'Valor registrado', 'Parte registrada', 'Recebido', 'Líquido recebido', 'Observação', 'Registrado em (UTC)', 'Origem', 'Feira ID', 'Feira', 'Leitura do cartão', 'Taxa retificada'];
     const rows = exportFairs(req.query['fairId']).flatMap(fair => new CashRegister(register.db, fair.id).sales().flatMap(sale => sale.items.map(item => [sale.id, sale.date, sale.paymentDate ?? '', sale.status,
       sale.paymentMethod, item.name, item.ownerName, item.quantity, reais(item.priceCents), reais(item.discountCents),
       reais(item.feeCents), reais(item.totalCents), reais(item.netCents),
       reais(sale.status === 'Pago' ? item.totalCents : 0), reais(sale.status === 'Pago' ? item.netCents : 0), sale.note,
-      sale.origin === 'Aplicativo' ? sale.createdAt : '', sale.origin, fair.id, fair.name])));
+      sale.origin === 'Aplicativo' ? sale.createdAt : '', sale.origin, fair.id, fair.name, sale.cardEntry ?? '', sale.feeCorrected ? 'Sim' : 'Não'])));
     res.setHeader('Content-Disposition', 'attachment; filename="vendas-feira.csv"');
     res.type('text/csv; charset=utf-8').send('\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n'));
   });
@@ -77,24 +77,28 @@ export function createApp(register: CashRegister, frontend?: string) {
     const fairs = register.fairs();
     const owners = [...new Set(fairs.flatMap(fair => fair.summary.byOwner.map(owner => owner.name)))];
     const header = ['Feira ID','Feira','Situação','Início','Encerramento','Meta','Recebido','Líquido recebido','Descontos','Taxas','Pendente','Pedidos pagos','Permutas (unidades)','Brindes (unidades)',
-      'Dinheiro','Pix','Cartão débito','Cartão crédito',...owners.map(name => `Parte de ${name}`)];
+      'Dinheiro','Pix','Cartão débito','Cartão crédito',...owners.map(name => `Parte de ${name}`),
+      ...owners.flatMap(name => [`Bruto recebido de ${name}`, `Taxas de ${name}`]), 'Participante da meta', 'Líquido da Con Affetto'];
     const rows = fairs.map(fair => [fair.id,fair.name,fair.closedAt ? 'Encerrada' : 'Em andamento',fair.startDate,fair.endDate ?? '',fair.targetCents === null ? '' : reais(fair.targetCents),
       ...(['receivedCents','netCents','discountCents','feeCents','pendingCents'] as const).map(key => reais(fair.summary[key])),fair.summary.paidCount,fair.summary.barterUnits,fair.summary.giftUnits,
-      ...fair.summary.byPayment.map(payment => reais(payment.totalCents)),...owners.map(name => reais(fair.summary.byOwner.find(owner => owner.name === name)?.netCents ?? 0))]);
+      ...fair.summary.byPayment.map(payment => reais(payment.totalCents)),...owners.map(name => reais(fair.summary.byOwner.find(owner => owner.name === name)?.netCents ?? 0)),
+      ...owners.flatMap(name => { const owner = fair.summary.byOwner.find(owner => owner.name === name); return [reais(owner?.receivedCents ?? 0), reais(owner?.feeCents ?? 0)]; }),
+      'Con Affetto', reais(fair.summary.byOwner.find(owner => owner.name === 'Con Affetto')?.netCents ?? 0)]);
     res.setHeader('Content-Disposition', 'attachment; filename="historico-feiras.csv"');
     res.type('text/csv; charset=utf-8').send('\uFEFF' + [header,...rows].map(row => row.map(csvCell).join(';')).join('\r\n'));
   });
   app.get('/api/export/days.csv', (req, res) => {
-    const header = ['Feira ID','Feira','Dia','Situação','Recebido','Líquido recebido','Pendente','Troco inicial','Entradas extras','Retiradas','Dinheiro esperado','Dinheiro contado','Diferença','Observação'];
+    const header = ['Feira ID','Feira','Dia','Situação','Recebido','Líquido recebido','Pendente','Troco inicial','Entradas extras','Retiradas','Dinheiro esperado','Dinheiro contado','Diferença','Observação', 'Líquido no fechamento original', 'Taxas retificadas após fechamento'];
     const rows = exportFairs(req.query['fairId']).flatMap(fair => {
       const selected = new CashRegister(register.db,fair.id);
       const dates = register.db.prepare(`SELECT date FROM days WHERE fair_id=? UNION SELECT date FROM sales WHERE fair_id=? AND deleted_at IS NULL
         UNION SELECT payment_date AS date FROM sales WHERE fair_id=? AND deleted_at IS NULL AND payment_date IS NOT NULL ORDER BY date`).all(fair.id,fair.id,fair.id) as { date: string }[];
       return dates.map(({ date }) => {
         const day = selected.day(date);
-        return [fair.id,fair.name,date,day.closedAt ? 'Fechado' : 'Em andamento',reais(day.summary.receivedCents),reais(day.summary.netCents),reais(day.summary.pendingCents),
+        const summary = day.adjustedSummary ?? day.summary;
+        return [fair.id,fair.name,date,day.closedAt ? 'Fechado' : 'Em andamento',reais(summary.receivedCents),reais(summary.netCents),reais(summary.pendingCents),
           reais(day.openingCents),reais(day.extraCents),reais(day.withdrawalCents),reais(day.expectedCents),day.countedCents === null ? '' : reais(day.countedCents),
-          day.differenceCents === null ? '' : reais(day.differenceCents),day.note];
+          day.differenceCents === null ? '' : reais(day.differenceCents),day.note,day.closedAt ? reais(day.summary.netCents) : '',reais(day.feeCorrectionCents ?? 0)];
       });
     });
     res.setHeader('Content-Disposition', 'attachment; filename="fechamentos.csv"');

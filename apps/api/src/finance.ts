@@ -1,4 +1,4 @@
-import { paymentMethods, type Product, type Sale, type SaleItem, type SaleItemInput, type PaymentMethod, type Owner, type Summary } from '@caixa/shared';
+import { calculatePaymentFees, paymentMethods, type CardEntry, type Product, type Sale, type SaleItem, type SaleItemInput, type PaymentMethod, type Owner, type Summary } from '@caixa/shared';
 import { requireCondition } from './validation.js';
 
 export function isNonCash(method: PaymentMethod): boolean {
@@ -26,7 +26,7 @@ export function calculateItem(product: Product, input: SaleItemInput, method: Pa
 export function summarize(sales: Sale[], owners: Owner[], date?: string): Summary {
   const summary: Summary = { receivedCents: 0, netCents: 0, discountCents: 0, feeCents: 0,
     pendingCents: 0, paidCount: 0, barterUnits: 0, giftUnits: 0,
-    byOwner: owners.map(owner => ({ ownerId: owner.id, name: owner.name, netCents: 0 })),
+    byOwner: owners.map(owner => ({ ownerId: owner.id, name: owner.name, receivedCents: 0, feeCents: 0, netCents: 0 })),
     byPayment: paymentMethods.slice(0, 4).map(method => ({ method, totalCents: 0 })) };
   for (const sale of sales) {
     if (sale.status === 'Pendente' && (!date || sale.date === date)) summary.pendingCents += sale.totalCents;
@@ -43,9 +43,16 @@ export function summarize(sales: Sale[], owners: Owner[], date?: string): Summar
     payment.totalCents += sale.totalCents;
     for (const item of sale.items) {
       let owner = summary.byOwner.find(entry => entry.ownerId === item.ownerId);
-      if (!owner) { owner = { ownerId: item.ownerId, name: item.ownerName, netCents: 0 }; summary.byOwner.push(owner); }
+      if (!owner) { owner = { ownerId: item.ownerId, name: item.ownerName, receivedCents: 0, feeCents: 0, netCents: 0 }; summary.byOwner.push(owner); }
+      owner.receivedCents += item.totalCents;
+      owner.feeCents += item.feeCents;
       owner.netCents += item.netCents;
     }
   }
   return summary;
+}
+
+export function applyPaymentFees(items: SaleItem[], method: PaymentMethod, entry: CardEntry | null): SaleItem[] {
+  const fees = calculatePaymentFees(items.map(item => item.totalCents), method, entry);
+  return items.map((item, index) => ({ ...item, feeCents: fees[index], netCents: item.totalCents - fees[index] }));
 }

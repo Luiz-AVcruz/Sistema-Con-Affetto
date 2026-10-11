@@ -56,3 +56,17 @@ inclusive ao trocar de seção ou reabrir o aplicativo. Essas preferências não
 alteram vendas, totais, CSVs ou o banco SQLite e não integram seu backup.
 Esta atualização é aplicada ao código local; o Flatpak instalado conserva
 sua versão anterior até uma nova compilação e instalação explícitas.
+
+## Meta e pagamentos desta feira
+
+A meta considera somente o líquido da **Con Affetto**. No Fechamento e no
+Histórico, bruto, taxas e líquido ficam separados por participante.
+As opções comuns de cartão usam aproximação no celular; **inserido** identifica
+a maquininha e sua taxa. Dinheiro e Pix não têm taxa nesta configuração.
+As taxas e a retificação autorizada dos pedidos anteriores estão descritas em
+[Pagamentos e retificações](14-pagamentos.md).
+
+Essa versão usa banco v6. O Flatpak anterior usa v5 e permanece com seu banco
+separado. Para retornar ao código antigo, restaure o backup anterior à atualização
+em outro arquivo; uma versão v5 recusa um banco v6. Não copie o banco da Nightly
+para a instalação antiga.

@@ -27,16 +27,17 @@ async function editThroughUi(page: Page, name: string, owner: string, price: str
   await page.getByRole('button', { name: 'Vender', exact: true }).click();
 }
 
-test('desconto e taxa são zerados ao trocar para permuta ou brinde', async ({ page, request }) => {
+test('desconto e taxa automática são zerados ao trocar para permuta ou brinde', async ({ page, request }) => {
   const f = await setup(page, request, 'Ajustes de teste');
   for (const method of ['Permuta', 'Não cobrado']) {
     if (method === 'Não cobrado') await page.getByRole('button', { name: 'Adicionar Ajustes de teste', exact: true }).click();
-    await page.getByText('Desconto e taxa deste item', { exact: true }).click();
+    await page.getByText('Desconto deste item', { exact: true }).click();
     await page.getByRole('textbox', { name: 'Desconto (R$)', exact: true }).fill('1,00');
-    await page.getByRole('textbox', { name: 'Taxa (R$)', exact: true }).fill('0,25');
+    await page.getByRole('combobox', { name: 'Pagamento', exact: true }).selectOption('Cartão crédito');
+    await expect(page.getByTestId('cart-fee')).toContainText('0,43');
     await page.getByRole('combobox', { name: 'Pagamento', exact: true }).selectOption(method);
     await expect(page.getByRole('textbox', { name: 'Desconto (R$)', exact: true })).toHaveValue('');
-    await expect(page.getByRole('textbox', { name: 'Taxa (R$)', exact: true })).toHaveValue('');
+    await expect(page.getByTestId('cart-fee')).toContainText('0,00');
     const saved = await (await submit(page)).json();
     expect(saved.paymentMethod).toBe(method); expect(saved.items[0].discountCents).toBe(0); expect(saved.items[0].feeCents).toBe(0);
   }

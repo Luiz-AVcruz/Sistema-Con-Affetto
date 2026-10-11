@@ -1,5 +1,8 @@
 export const paymentMethods = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito', 'Permuta', 'Não cobrado'] as const;
 export type PaymentMethod = typeof paymentMethods[number];
+export type CardEntry = 'Aproximação' | 'Inserido';
+export interface PaymentOptions { automaticFees?: true; cardEntry?: CardEntry }
+export { paymentChoices, paymentChoiceValue, paymentLabel, paymentRate, calculatePaymentFees } from './payments.js';
 export type SaleStatus = 'Pago' | 'Pendente' | 'Cancelado';
 export interface Owner { id: number; name: string }
 export interface Product {
@@ -15,7 +18,7 @@ export interface SaleItemInput {
   expectedName?: string; expectedOwnerId?: number; expectedOwnerName?: string;
   discountCents: number; feeCents: number;
 }
-export interface SaleInput {
+export interface SaleInput extends PaymentOptions {
   requestId: string; date: string; paymentMethod: PaymentMethod;
   fairId?: number;
   status: 'Pago' | 'Pendente'; note: string; items: SaleItemInput[];
@@ -29,11 +32,12 @@ export interface Sale {
   status: SaleStatus; note: string; createdAt: string; origin: 'Aplicativo' | 'Planilha'; items: SaleItem[];
   grossCents: number; discountCents: number; feeCents: number;
   totalCents: number; netCents: number;
+  automaticFees: boolean; cardEntry: CardEntry | null; feeCorrected: boolean;
 }
 export interface Summary {
   receivedCents: number; netCents: number; discountCents: number; feeCents: number;
   pendingCents: number; paidCount: number; barterUnits: number; giftUnits: number;
-  byOwner: { ownerId: number; name: string; netCents: number }[];
+  byOwner: { ownerId: number; name: string; receivedCents: number; feeCents: number; netCents: number }[];
   byPayment: { method: PaymentMethod; totalCents: number }[];
 }
 export interface CashInput {
@@ -43,6 +47,7 @@ export interface CashInput {
 export interface Day extends CashInput {
   date: string; closedAt: string | null; summary: Summary;
   expectedCents: number; differenceCents: number | null;
+  feeCorrectionsThroughId?: number; adjustedSummary?: Summary; feeCorrectionCents?: number;
 }
 export interface FairInput { name: string; targetCents: number | null }
 export interface Fair extends FairInput {
