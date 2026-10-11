@@ -10,7 +10,7 @@ Registra pedidos mistos, pagamentos, pendências, permutas, brindes, cancelament
 
 No **Histórico**, **Cancelar pedido** mantém o registro como cancelado. **Excluir pedido** pede confirmação e retira um lançamento acidental do histórico, dos totais e dos CSVs. Se estava pago, devolve as quantidades ao estoque; pendentes ou já cancelados não provocam nova devolução. Não é permitido excluir pedidos de feira encerrada nem com dia do pedido ou recebimento fechado. O backup completo mantém os registros internos de exclusão para impedir reenvios ou reimportações que recriem o lançamento.
 
-O catálogo, os pedidos e os fechamentos podem ser extraídos da última versão **salva** da planilha. A migração inicial preserva pedidos já feitos no aplicativo e não baixa novamente o estoque das vendas antigas. O histórico abre com todos os dias visíveis. Pedidos do aplicativo mostram data e hora de registro; pedidos da planilha indicam que o horário não foi registrado na origem.
+O catálogo, os pedidos e os fechamentos podem ser extraídos da última versão **salva** da planilha. A migração inicial preserva pedidos já feitos no aplicativo e não baixa novamente o estoque das vendas antigas. O histórico começa na data selecionada e lembra a última escolha de período e ordenação neste dispositivo. Pedidos do aplicativo mostram data e hora de registro; pedidos da planilha indicam que o horário não foi registrado na origem.
 
 Antes de usar o aplicativo como caixa principal: conferir o catálogo, o histórico e a contagem atual; validar os cenários de atendimento; ensaiar backup/restauração; implementar um procedimento de retificação de dias fechados se esse recurso for necessário. A primeira versão bloqueia alterações financeiras em dias fechados.
 

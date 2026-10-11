@@ -93,6 +93,9 @@ fieldset { border: 0; margin: 0; padding: 0; }
 .fair-close-row p { margin-bottom: 10px; }
 .status-line { color: #164e63; font-size: .9rem; }
 .history-order { border-top: 1px solid #e5e7eb; padding: 22px 0; }
+.history-filters { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px 24px; margin-bottom: 14px; }
+.history-filters label { margin-bottom: 0; }
+.history-filters > label:not(.checkbox-label) { width: min(260px, 100%); }
 .history-order .section-heading { margin-bottom: 12px; }
 .history-order .section-heading strong { font-size: 1.2rem; margin-right: 12px; }
 .order-date { text-align: right; font-size: .87rem; color: #475569; }

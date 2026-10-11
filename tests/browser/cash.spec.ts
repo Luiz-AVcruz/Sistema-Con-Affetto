@@ -37,8 +37,10 @@ test('histórico importado, horário e fluxo de venda, recebimento, cancelamento
   await page.getByRole('combobox', { name: 'Situação', exact: true }).selectOption('Pendente');
   await submit();
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
-  await expect(page.getByRole('checkbox', { name: 'Mostrar todos os dias' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Mostrar todos os dias' })).not.toBeChecked();
   const historical = page.locator('.history-order').filter({ hasText: 'Pedido histórico de teste' });
+  await expect(historical).toHaveCount(0);
+  await page.getByRole('checkbox', { name: 'Mostrar todos os dias' }).check();
   await expect(historical).toContainText('08/10/2026');
   await expect(historical).toContainText('Horário não registrado na planilha');
   await expect(historical.getByRole('button', { name: 'Cancelar pedido', exact: true })).toBeDisabled();

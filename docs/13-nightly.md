@@ -40,3 +40,19 @@ da outra versão nem copie somente um SQLite aberto com WAL.
 
 O Flatpak pode ser construído ao final do dia com `npm run flatpak:build`.
 Atualizar o pacote não transfere os dados lançados na Nightly.
+
+## Histórico
+
+Na primeira abertura, o histórico mostra somente pedidos e recebimentos da
+data de trabalho selecionada, com os mais recentes primeiro. **Mostrar todos
+os dias** inclui também pedidos e pendências anteriores da feira consultada.
+O seletor **Ordenar pedidos** permite consultar do maior valor para o menor,
+do menor para o maior, do mais recente para o mais antigo e no sentido inverso.
+O valor é o total exibido no pedido. A data usa o dia do pedido e seu horário
+de registro quando conhecido; pedidos importados não ganham uma hora fictícia.
+
+O período e a ordenação escolhidos ficam salvos no perfil local da Nightly,
+inclusive ao trocar de seção ou reabrir o aplicativo. Essas preferências não
+alteram vendas, totais, CSVs ou o banco SQLite e não integram seu backup.
+Esta atualização é aplicada ao código local; o Flatpak instalado conserva
+sua versão anterior até uma nova compilação e instalação explícitas.

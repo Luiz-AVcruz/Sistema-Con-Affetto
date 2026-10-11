@@ -12,7 +12,7 @@ A migração lê os valores salvos de cada venda e insere seus snapshots, preser
 2. O extrator gera `catalogo-planilha.json`, `referencia-planilha.json` e `historico-planilha.json`, privados em `data/`. O histórico inclui data, pagamento, situação, referência de pedido, observação, preço, participante, quantidade, desconto, taxa, total e líquido salvos, além dos fechamentos.
 3. `apps/api/src/import-history.ts` valida o formato, cria um backup completo por `serialize()` e abre o banco com a migração de esquema necessária.
 4. `historical-import.ts` valida os vínculos e a compatibilidade do estoque, agrupa os itens, insere os pedidos e confronta os resumos. A transação só confirma depois de todos os fechamentos passarem pela conferência.
-5. `CashRegister.sales()` identifica a origem pelo vínculo e devolve o contrato comum ao Angular. A interface mostra os pedidos de todos os dias inicialmente.
+5. `CashRegister.sales()` identifica a origem pelo vínculo e devolve o contrato comum ao Angular. A interface começa na data selecionada; marque **Mostrar todos os dias** para consultar todo o histórico importado. A última escolha de período e ordenação fica salva neste dispositivo.
 
 O extrator exige vendas e fechamentos conferidos. Produto desconhecido, preço/participante ausente, quantidade inválida ou estoque salvo divergente provocam erro, em vez de descartar silenciosamente uma venda. Fórmulas não são recalculadas pelo Python: salve o ODS no Calc antes de extrair as alterações que deseja migrar. O arquivo de bloqueio serve para informar que podem existir alterações ainda não salvas.
 
