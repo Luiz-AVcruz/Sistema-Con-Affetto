@@ -1,15 +1,28 @@
 {
-  "name": "@caixa/api", "version": "0.1.0", "private": true, "type": "module",
+  "name": "@caixa/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts", "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js", "pretest": "npm run build", "test": "node --import tsx --test test/*.test.ts",
-    "seed": "node --import tsx src/seed.ts", "import:history": "node --import tsx src/import-history.ts"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "pretest": "npm run build",
+    "test": "node --import tsx --test test/*.test.ts",
+    "seed": "node --import tsx src/seed.ts",
+    "import:history": "node --import tsx src/import-history.ts"
   },
   "dependencies": {
-    "@caixa/shared": "*", "better-sqlite3": "13.0.3", "express": "^5.1.0", "zod": "^4.0.0"
+    "@caixa/shared": "*",
+    "better-sqlite3": "13.0.3",
+    "express": "^5.1.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13", "@types/express": "^5.0.0",
-    "@types/node": "^24.0.0", "tsx": "^4.20.0"
-  }
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0"
+  },
+  "license": "AGPL-3.0-only"
 }

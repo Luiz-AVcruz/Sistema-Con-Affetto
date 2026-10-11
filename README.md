@@ -110,3 +110,7 @@ O restaurador verifica a integridade e o formato do banco e recusa um destino qu
 Comece por [docs/README.md](docs/README.md). A sequência cobre domínio, arquitetura, dados, API, leitura do código e o desafio em Rust. Ela distingue o comportamento já implementado das etapas que ainda precisam ser validadas para a substituição da planilha.
 
 O projeto usa um repositório Git local, sem remote. O ciclo de commits está em [docs/08-git.md](docs/08-git.md); as instruções para alterações futuras estão em [AGENTS.md](AGENTS.md).
+
+## Licença
+
+O código deste projeto está sob a GNU Affero General Public License, versão 3 (AGPL-3.0-only). O texto completo está em [LICENSE](LICENSE).

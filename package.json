@@ -2,8 +2,13 @@
   "name": "caixa-da-feira",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
-  "engines": { "node": ">=24.15.0 <25" },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
   "scripts": {
     "dev": "npm run build -w @caixa/shared && concurrently -k -n api,web 'npm run dev -w @caixa/api' 'npm run dev -w @caixa/web'",
     "build": "npm run build -w @caixa/shared && npm run build -w @caixa/api && npm run build -w @caixa/web",
@@ -20,5 +25,10 @@
     "flatpak:test": "node scripts/flatpak-runtime-smoke.mjs",
     "test:packaging": "node --test tests/packaging/*.test.mjs"
   },
-  "devDependencies": { "@playwright/test": "^1.56.0", "concurrently": "^9.2.0", "typescript": "~6.0.0" }
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "concurrently": "^9.2.0",
+    "typescript": "~6.0.0"
+  },
+  "license": "AGPL-3.0-only"
 }
