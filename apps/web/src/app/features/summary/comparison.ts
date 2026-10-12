@@ -26,9 +26,12 @@ export interface ComparisonPreferences {
 export interface ComparisonPeriod { key: string; label: string; dates: string[] }
 
 export function comparisonPreferencesKey(fairId: number): string { return `caixa-feira-comparisons-v1-${fairId}`; }
-export function loadComparisonPreferences(fairId: number): ComparisonPreferences {
-  const defaults: ComparisonPreferences = { dates: null, ownerIds: null, productKeys: null,
+export function defaultComparisonPreferences(): ComparisonPreferences {
+  return { dates: null, ownerIds: null, productKeys: null,
     target: 'both', grouping: 'day', metric: 'units-net', order: 'units-desc', showEmpty: false };
+}
+export function loadComparisonPreferences(fairId: number): ComparisonPreferences {
+  const defaults = defaultComparisonPreferences();
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(comparisonPreferencesKey(fairId)) ?? 'null');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;

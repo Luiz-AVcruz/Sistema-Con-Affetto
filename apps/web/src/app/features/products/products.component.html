@@ -1,11 +1,16 @@
 <div class="two-columns">
   <section class="panel">
-    <div class="section-heading"><h2>Cadastro e estoque</h2><span>{{ store.data()?.products?.length }} produtos</span></div>
+    <div class="section-heading"><h2>Cadastro e estoque</h2><span>{{ filtered().length }} de {{ store.data()?.products?.length }} produtos</span></div>
     <p class="muted">O estoque informado aqui é a contagem atual disponível. Vazio significa A contar.</p>
+    <div class="list-filters">
+      <label class="search-label">Buscar no cadastro<input type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Produto, participante ou descrição" (keydown.escape)="search.set('')"></label>
+      <label>Mostrar produtos<select [ngModel]="filter()" (ngModelChange)="filter.set($event)"><option value="all">Todos</option><option value="active">Ativos</option><option value="inactive">Inativos</option><option value="out-of-stock">Sem estoque</option></select></label>
+      @if (search() || filter() !== 'all') { <button type="button" class="secondary" (click)="search.set(''); filter.set('all')">Limpar filtros</button> }
+    </div>
     <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Participante</th><th>Preço</th><th>Estoque</th><th></th></tr></thead><tbody>
-      @for (product of store.data()?.products; track product.id) {
+      @for (product of filtered(); track product.id) {
         <tr><td><strong>{{ product.name }}</strong><small>{{ product.description }}{{ product.active ? '' : ' · Inativo' }}</small></td><td>{{ product.ownerName }}</td><td class="number">{{ money(product.priceCents) }}</td><td class="number">{{ product.stock === null ? 'A contar' : product.stock }}</td><td><button class="secondary" (click)="edit(product)" [disabled]="store.busy()">Editar</button></td></tr>
-      } @empty { <tr><td colspan="5">Nenhum produto cadastrado.</td></tr> }
+      } @empty { <tr><td colspan="5">{{ store.data()?.products?.length ? 'Nenhum produto corresponde aos filtros.' : 'Nenhum produto cadastrado.' }}</td></tr> }
     </tbody></table></div>
   </section>
   <section class="panel">

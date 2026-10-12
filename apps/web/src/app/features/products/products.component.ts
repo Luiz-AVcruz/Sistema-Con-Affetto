@@ -1,14 +1,23 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import type { Product } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatMoney, moneyInput, parseMoney } from '../../core/money';
+import { matchesSearch } from '../../core/search';
 
 @Component({ selector: 'app-products', standalone: true, imports: [ReactiveFormsModule, FormsModule], templateUrl: './products.component.html' })
 export class ProductsComponent {
   readonly store = inject(CashStore);
   readonly money = formatMoney;
+  readonly search = signal('');
+  readonly filter = signal<'all' | 'active' | 'inactive' | 'out-of-stock'>('all');
+  readonly filtered = computed(() => (this.store.data()?.products ?? []).filter(product => {
+    const filter = this.filter();
+    return (filter === 'all' || filter === 'active' && product.active || filter === 'inactive' && !product.active
+      || filter === 'out-of-stock' && product.stock === 0)
+      && matchesSearch(`${product.name} ${product.ownerName} ${product.description}`, this.search());
+  }));
   private readonly fb = inject(FormBuilder);
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(100)]], description: ['', Validators.maxLength(200)],

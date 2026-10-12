@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { paymentChoices, paymentChoiceValue, paymentLabel, type Sale } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, formatRegisteredAt } from '../../core/money';
+import { matchesSearch } from '../../core/search';
 
 const preferencesKey = 'caixa-feira-history-preferences-v1';
 const orderOptions = [
@@ -12,7 +13,12 @@ const orderOptions = [
   { value: 'value-asc', label: 'Menor valor primeiro' }
 ] as const;
 type HistoryOrder = typeof orderOptions[number]['value'];
-interface HistoryPreferences { allDates: boolean; order: HistoryOrder }
+type HistoryStatus = 'all' | Sale['status'];
+interface HistoryPreferences { allDates: boolean; order: HistoryOrder; status: HistoryStatus }
+const statusOptions = [
+  { value: 'all', label: 'Todos' }, { value: 'Pendente', label: 'Pendentes' },
+  { value: 'Pago', label: 'Pagos' }, { value: 'Cancelado', label: 'Cancelados' }
+] as const;
 
 @Component({ selector: 'app-history', standalone: true, imports: [FormsModule], templateUrl: './history.component.html' })
 export class HistoryComponent {
@@ -26,6 +32,9 @@ export class HistoryComponent {
   private readonly preferences = this.loadPreferences();
   readonly allDates = signal(this.preferences.allDates);
   readonly order = signal(this.preferences.order);
+  readonly status = signal(this.preferences.status);
+  readonly search = signal('');
+  readonly statusOptions = statusOptions;
   readonly orderOptions = orderOptions;
   readonly methods = paymentChoices.filter(choice => choice.method !== 'Permuta' && choice.method !== 'Não cobrado');
   readonly paymentLabel = paymentLabel;
@@ -38,8 +47,10 @@ export class HistoryComponent {
     if (data?.day.closedAt) dates.add(data.day.date);
     return dates;
   });
+  readonly daySales = computed(() => (this.store.data()?.sales ?? []).filter(sale => this.allDates() || sale.date === this.historyDate() || sale.paymentDate === this.historyDate()));
   readonly sales = computed(() => {
-    const sales = (this.store.data()?.sales ?? []).filter(sale => this.allDates() || sale.date === this.historyDate() || sale.paymentDate === this.historyDate());
+    const sales = this.daySales().filter(sale => (this.status() === 'all' || sale.status === this.status())
+      && matchesSearch(`${sale.note} ${sale.items.map(item => `${item.name} ${item.ownerName}`).join(' ')}`, this.search()));
     const byDate = (a: Sale, b: Sale) => a.date.localeCompare(b.date)
       || (a.origin === 'Planilha' ? '' : a.createdAt).localeCompare(b.origin === 'Planilha' ? '' : b.createdAt);
     switch (this.order()) {
@@ -58,14 +69,15 @@ export class HistoryComponent {
     });
   }
   private loadPreferences(): HistoryPreferences {
-    const defaults: HistoryPreferences = { allDates: false, order: 'date-desc' };
+    const defaults: HistoryPreferences = { allDates: false, order: 'date-desc', status: 'all' };
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(preferencesKey) ?? 'null');
       if (!saved || typeof saved !== 'object') return defaults;
-      const preferences = saved as { allDates?: unknown; order?: unknown };
+      const preferences = saved as { allDates?: unknown; order?: unknown; status?: unknown };
       return {
         allDates: typeof preferences.allDates === 'boolean' ? preferences.allDates : defaults.allDates,
-        order: orderOptions.some(option => option.value === preferences.order) ? preferences.order as HistoryOrder : defaults.order
+        order: orderOptions.some(option => option.value === preferences.order) ? preferences.order as HistoryOrder : defaults.order,
+        status: statusOptions.some(option => option.value === preferences.status) ? preferences.status as HistoryStatus : defaults.status
       };
     } catch { return defaults; }
   }
@@ -75,6 +87,7 @@ export class HistoryComponent {
   }
   setAllDates(value: boolean): void { this.allDates.set(value); this.preferences.allDates = value; this.savePreferences(); }
   setOrder(value: HistoryOrder): void { this.order.set(value); this.preferences.order = value; this.savePreferences(); }
+  setStatus(value: HistoryStatus): void { this.status.set(value); this.preferences.status = value; this.savePreferences(); }
   useWorkDate(): void { this.setAllDates(false); this.clearConsultedDate.emit(); }
   async cancel(sale: Sale): Promise<void> {
     if (confirm(`Cancelar o pedido de ${formatMoney(sale.totalCents)}? Se estava pago, a quantidade será devolvida ao estoque. Confirme que os produtos realmente voltaram.`)) await this.store.cancel(sale.id);

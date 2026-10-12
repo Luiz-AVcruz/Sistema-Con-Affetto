@@ -6,7 +6,7 @@ import { formatDay, formatMoney, formatRegisteredAt } from '../../core/money';
 import { DaySummaryComponent } from '../closing/day-summary.component';
 import { summarizeProducts, type ProductAmounts } from './product-summary';
 import { comparisonGroupings, comparisonMetrics, comparisonOrders, comparisonTargets, comparisonPeriods,
-  comparisonPreferencesKey, hasDayActivity, loadComparisonPreferences, periodAmounts, sumProductAmounts,
+  comparisonPreferencesKey, defaultComparisonPreferences, hasDayActivity, loadComparisonPreferences, periodAmounts, sumProductAmounts,
   type ComparisonPreferences } from './comparison';
 
 @Component({ selector: 'app-summary', standalone: true, imports: [FormsModule, DaySummaryComponent], templateUrl: './summary.component.html' })
@@ -88,6 +88,7 @@ export class SummaryComponent {
     try { localStorage.setItem(comparisonPreferencesKey(this.store.data()!.fair.id), JSON.stringify(this.preferences())); }
     catch { /* A seleção continua funcionando nesta seção quando o armazenamento está indisponível. */ }
   }
+  resetComparison(): void { this.updatePreferences(defaultComparisonPreferences()); }
   toggleDay(date: string, selected: boolean): void {
     if (!this.closedDays().some(day => day.date === date)) return;
     const dates = new Set(this.preferences().dates ?? this.allClosedDays().map(day => day.date));

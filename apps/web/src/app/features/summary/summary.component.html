@@ -17,7 +17,7 @@
   @if (closedDays().length) {
     <section class="panel spaced">
       <div class="section-heading"><h2>Escolher comparações</h2><span>{{ comparisonDays().length }} dia(s) em {{ periods().length }} período(s)</span></div>
-      <div class="button-row"><button type="button" class="secondary" (click)="updatePreferences({ dates: null })">Comparar todos os dias</button><button type="button" class="secondary" (click)="updatePreferences({ dates: [] })">Limpar dias da comparação</button></div>
+      <div class="button-row"><button type="button" class="secondary" (click)="updatePreferences({ dates: null })">Comparar todos os dias</button><button type="button" class="secondary" (click)="updatePreferences({ dates: [] })">Limpar dias da comparação</button><button type="button" class="secondary" (click)="resetComparison()">Restaurar comparação padrão</button></div>
       <div class="comparison-filters">
         <label>Comparar<select [ngModel]="preferences().target" (ngModelChange)="updatePreferences({ target: $event })">@for (option of comparisonTargets; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
         <label>Agrupar comparação<select [ngModel]="preferences().grouping" (ngModelChange)="updatePreferences({ grouping: $event })">@for (option of comparisonGroupings; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>

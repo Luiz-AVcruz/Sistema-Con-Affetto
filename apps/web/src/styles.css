@@ -29,6 +29,10 @@ nav button.active { background: #172b3a; color: white; }
 .section-heading { display: flex; justify-content: space-between; gap: 15px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
 .section-heading h2 { margin: 0; }
 .section-heading > span { color: #64748b; font-size: .85rem; }
+.list-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.list-filters label { flex: 1 1 160px; min-width: 0; margin: 0; }
+.list-filters .search-label { flex: 2 1 230px; }
+.list-filters button { min-height: 42px; }
 .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; }
 .product-card { text-align: left; display: flex; flex-direction: column; gap: 6px; background: #fafbfc; border-color: #dce1e7; padding: 16px; min-height: 160px; }
 .product-card strong { font-size: 1rem; line-height: 1.4; }

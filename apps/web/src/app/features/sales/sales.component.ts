@@ -1,8 +1,9 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { calculatePaymentFees, calculateSplitPaymentFees, paymentChoices, paymentChoiceValue, paymentMethods, paymentRate, type CardEntry, type PaymentMethod, type Product, type SaleInput, type SalePaymentInput } from '@caixa/shared';
 import { CashStore } from '../../core/cash.store';
 import { formatDay, formatMoney, parseMoney } from '../../core/money';
+import { matchesSearch } from '../../core/search';
 
 interface CartItem { product: Product; quantity: number; discount: string; fee: string }
 interface Draft { version: 2; fairId: number; requestId: string; date: string; items: CartItem[]; method: PaymentMethod; status: 'Pago' | 'Pendente'; note: string; catalogExpectations?: boolean; pendingSubmission?: SaleInput; automaticFees?: boolean; cardEntry?: CardEntry | null; splitPayments?: boolean; secondMethod?: PaymentMethod; secondCardEntry?: CardEntry | null; firstPaymentAmount?: string }
@@ -18,6 +19,10 @@ export class SalesComponent {
   readonly methods = paymentChoices;
   readonly splitMethods = paymentChoices.filter(choice => choice.method !== 'Permuta' && choice.method !== 'Não cobrado');
   readonly search = signal('');
+  readonly clearRequested = signal(false);
+  private readonly keepDraftButton = viewChild<ElementRef<HTMLButtonElement>>('keepDraftButton');
+  private readonly clearButton = viewChild<ElementRef<HTMLButtonElement>>('clearButton');
+  readonly products = computed(() => (this.store.data()?.products ?? []).filter(product => product.active));
   readonly cart = signal<CartItem[]>([]);
   readonly pendingSubmission = signal<SaleInput | null>(null);
   readonly catalogChanged = computed(() => this.cart().some(item => {
@@ -26,8 +31,7 @@ export class SalesComponent {
       || current.ownerId !== item.product.ownerId || current.ownerName !== item.product.ownerName;
   }));
   readonly filtered = computed(() => {
-    const query = this.search().toLocaleLowerCase('pt-BR');
-    return (this.store.data()?.products ?? []).filter(product => product.active && `${product.name} ${product.ownerName}`.toLocaleLowerCase('pt-BR').includes(query));
+    return this.products().filter(product => matchesSearch(`${product.name} ${product.ownerName}`, this.search()));
   });
   method: PaymentMethod = 'Dinheiro';
   splitPayments = false;
@@ -44,9 +48,11 @@ export class SalesComponent {
   private catalogExpectations = true;
 
   constructor() {
+    effect(() => this.keepDraftButton()?.nativeElement.focus());
     effect(() => {
       const data = this.store.data();
       if (!data || data.fair.id === this.loadedFairId) return;
+      this.clearRequested.set(false);
       this.loadedFairId = data.fair.id;
       this.loadDraft(data.fair.id, data.fairs.reduce((oldest, fair) => Math.min(oldest, fair.id), data.fair.id));
     });
@@ -116,6 +122,7 @@ export class SalesComponent {
   }
 
   private resetEmptyDraft(): void {
+    this.clearRequested.set(false);
     this.cart.set([]); this.requestId = crypto.randomUUID(); this.note = ''; this.method = 'Dinheiro'; this.status = 'Pago'; this.draftDate = this.store.date();
     this.catalogExpectations = true; this.pendingSubmission.set(null);
     this.automaticFees = true; this.cardEntry = null; this.splitPayments = false;
@@ -123,6 +130,7 @@ export class SalesComponent {
   }
 
   persist(): boolean {
+    this.clearRequested.set(false);
     const fairId = this.loadedFairId;
     if (fairId === null) return false;
     try {
@@ -160,6 +168,22 @@ export class SalesComponent {
     if (this.pendingSubmission()) return;
     this.resetEmptyDraft();
     this.persist();
+  }
+  requestClear(): void {
+    if (this.store.busy() || this.pendingSubmission()) return;
+    const filled = this.cart().length > 0 || this.note.trim().length > 0 || this.method !== 'Dinheiro'
+      || this.status !== 'Pago' || this.splitPayments || !this.automaticFees;
+    if (filled) this.clearRequested.set(true);
+    else this.clear();
+  }
+  keepDraft(): void {
+    this.clearRequested.set(false);
+    this.clearButton()?.nativeElement.focus();
+  }
+  confirmClear(): void {
+    if (!this.clearRequested() || this.store.busy() || this.pendingSubmission()) return;
+    this.clear();
+    this.clearButton()?.nativeElement.focus();
   }
   nonCash(): boolean { return this.method === 'Permuta' || this.method === 'Não cobrado'; }
   get paymentChoice(): string { return paymentChoiceValue(this.method, this.cardEntry); }

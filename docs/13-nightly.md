@@ -62,6 +62,35 @@ alteram vendas, totais, CSVs ou o banco SQLite e não integram seu backup.
 Esta atualização é aplicada ao código local; o Flatpak instalado conserva
 sua versão anterior até uma nova compilação e instalação explícitas.
 
+## Busca e conveniência
+
+As buscas em **Vender**, **Produtos** e **Histórico** aceitam nomes sem acentos,
+maiúsculas e palavras separadas por espaços: `pao marcia` também encontra
+um pão da Márcia. Use **Limpar busca** ou Escape no campo para retirar a busca.
+No cadastro, **Mostrar produtos** separa ativos, inativos e sem estoque.
+**Sem estoque** inclui somente estoque zero; **A contar** continua separado.
+Os filtros do cadastro não descartam o produto que estiver sendo editado.
+
+No Histórico, **Situação dos pedidos** permite consultar pagos, pendentes ou
+cancelados dentro do período escolhido. A situação selecionada é lembrada
+neste perfil; o texto de busca é temporário. **Limpar busca e situação** remove
+esses dois filtros e mantém o período e a ordenação. O contador mostra quantos
+pedidos do período estão visíveis. A exportação CSV continua incluindo todos
+os pedidos da feira, mesmo quando a tela está filtrada.
+
+**Limpar** pede confirmação quando o pedido contém itens, observação ou escolhas
+de pagamento. **Manter pedido** conserva o rascunho; **Descartar rascunho**
+confirma a limpeza. Alterar o pedido ou trocar de feira fecha essa confirmação.
+A confirmação aparece dentro da tela e somente na
+limpeza manual; o pedido registrado continua abrindo um carrinho vazio sem
+essa pergunta. Um envio que aguarda confirmação permanece bloqueado para
+limpeza e edição até recuperar o resultado.
+
+No Sumário, **Restaurar comparação padrão** volta a todos os dias, participantes
+e produtos, com agrupamento por dia, unidades e líquido, e mais unidades
+primeiro. Fechamentos vazios voltam a ficar ocultos. O botão afeta somente as
+preferências da feira consultada, sem mudar a data de trabalho ou os registros.
+
 ## Sumário dos dias fechados
 
 A seção **Sumário** lista os dias fechados da feira selecionada, do mais recente

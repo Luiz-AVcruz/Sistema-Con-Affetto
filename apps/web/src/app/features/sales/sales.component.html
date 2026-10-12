@@ -1,9 +1,12 @@
 <div class="sales-layout">
   <section class="panel">
-    <div class="section-heading"><h2>Produtos</h2><span>{{ filtered().length }} disponíveis</span></div>
-    <label class="search-label">Buscar produto ou participante
-      <input type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Nome do produto">
-    </label>
+    <div class="section-heading"><h2>Produtos</h2><span>{{ filtered().length }} de {{ products().length }} produtos</span></div>
+    <div class="list-filters">
+      <label class="search-label">Buscar produto ou participante
+        <input type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Nome do produto" (keydown.escape)="search.set('')">
+      </label>
+      @if (search()) { <button type="button" class="secondary" (click)="search.set('')">Limpar busca</button> }
+    </div>
     <div class="product-grid">
       @for (product of filtered(); track product.id) {
         <button class="product-card" type="button" (click)="add(product)" [disabled]="store.busy() || !!pendingSubmission() || !!store.data()?.fair?.closedAt || !!store.data()?.day?.closedAt || product.stock === 0" [attr.aria-label]="'Adicionar ' + product.name">
@@ -11,11 +14,18 @@
           <span>{{ product.description || 'Unidade' }}</span><b>{{ money(product.priceCents) }}</b>
           <span class="stock">Estoque: {{ product.stock === null ? 'A contar' : product.stock }}</span>
         </button>
-      } @empty { <p class="empty">Cadastre produtos na aba Produtos para começar.</p> }
+      } @empty { <p class="empty">{{ products().length ? 'Nenhum produto corresponde à busca. Limpe a busca ou tente outro nome.' : 'Não há produtos ativos para vender. Cadastre ou ative um produto na aba Produtos.' }}</p> }
     </div>
   </section>
   <section class="panel cart-panel">
-    <div class="section-heading"><h2>Pedido</h2><button class="text-button" (click)="clear()" [disabled]="store.busy() || !!pendingSubmission()">Limpar</button></div>
+    <div class="section-heading"><h2>Pedido</h2><button #clearButton type="button" class="text-button" (click)="requestClear()" [disabled]="store.busy() || !!pendingSubmission()" [attr.aria-expanded]="clearRequested()" aria-controls="clear-confirmation">Limpar</button></div>
+    @if (clearRequested()) {
+      <section id="clear-confirmation" class="delete-confirmation" role="region" aria-live="polite" aria-labelledby="clear-title">
+        <h3 id="clear-title">Descartar este rascunho?</h3>
+        <p>Os itens, a observação e as escolhas de pagamento serão descartados. Os pedidos já registrados ficam no histórico.</p>
+        <div class="button-row"><button #keepDraftButton type="button" class="secondary" (click)="keepDraft()">Manter pedido</button><button type="button" class="delete-confirm-button" (click)="confirmClear()" [disabled]="store.busy() || !!pendingSubmission()">Descartar rascunho</button></div>
+      </section>
+    }
     @if (store.data()?.fair?.closedAt) { <p class="alert">Esta feira está encerrada. O histórico e o rascunho ficam disponíveis para consulta, sem novos pedidos.</p> }
     <p class="muted">Data do pedido: {{ dayLabel(draftDate) }}</p>
     @if (!pendingSubmission() && cart().length && draftDate !== store.date()) { <p class="alert">Este rascunho é de outro dia. Selecione {{ dayLabel(draftDate) }} antes de registrar.</p> }

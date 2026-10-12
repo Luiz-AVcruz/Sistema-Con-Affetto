@@ -4,6 +4,12 @@
     <label class="checkbox-label"><input type="checkbox" [ngModel]="allDates()" (ngModelChange)="setAllDates($event)">Mostrar todos os dias</label>
     <label>Ordenar pedidos<select [ngModel]="order()" (ngModelChange)="setOrder($event)">@for (option of orderOptions; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
   </div>
+  <div class="list-filters">
+    <label class="search-label">Buscar no histórico<input type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Produto, participante ou observação" (keydown.escape)="search.set('')"></label>
+    <label>Situação dos pedidos<select [ngModel]="status()" (ngModelChange)="setStatus($event)">@for (option of statusOptions; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+    @if (search() || status() !== 'all') { <button type="button" class="secondary" (click)="search.set(''); setStatus('all')">Limpar busca e situação</button> }
+  </div>
+  <p class="muted" role="status">{{ sales().length }} de {{ daySales().length }} pedidos neste período. Os filtros de busca e situação valem somente para a tela; o CSV continua incluindo todos os pedidos desta feira.</p>
   <p class="muted">{{ allDates() ? 'Exibe o histórico completo.' : 'Exibe os pedidos e recebimentos de ' + dayLabel(historyDate()) + '.' }} Receber uma pendência registra o pagamento em {{ dayLabel(store.date()) }}.</p>
   @if (consultedDate()) { <div class="section-heading"><p class="muted">Consulta do dia {{ dayLabel(consultedDate()!) }}. A data de trabalho continua em {{ dayLabel(store.date()) }}.</p><button type="button" class="secondary" (click)="useWorkDate()">Usar data de trabalho</button></div> }
   @for (sale of sales(); track sale.id) {
@@ -34,5 +40,5 @@
         </section>
       }
     </article>
-  } @empty { <p class="empty">Nenhum pedido para mostrar.</p> }
+  } @empty { <p class="empty">{{ daySales().length ? 'Nenhum pedido corresponde aos filtros. Limpe a busca ou altere a situação.' : 'Nenhum pedido neste período. Para consultar outras datas, marque Mostrar todos os dias.' }}</p> }
 </section>
