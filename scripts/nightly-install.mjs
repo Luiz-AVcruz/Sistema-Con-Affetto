@@ -4,6 +4,10 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+if (nodeMajor !== 24 || nodeMinor < 15) {
+  throw new Error('Instale o atalho com Node 24.15 ou posterior da série 24. O runtime será reutilizado nas próximas aberturas.');
+}
 const database = resolve(process.env.CAIXA_DB ?? join(root, 'data/nightly/caixa.sqlite'));
 if (!(await stat(database)).isFile()) throw new Error('Restaure o banco da Nightly antes de instalar o atalho.');
 const quote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
@@ -14,7 +18,7 @@ for (const folder of [installRoot, applications, icons]) await mkdir(folder, { r
 const launch = join(installRoot, 'launch');
 await writeFile(`${launch}.tmp`, [
   '#!/bin/sh',
-  `exec /bin/bash ${quote(join(root, 'scripts/nightly-launch.sh'))} ${quote(root)} ${quote(database)}`,
+  `exec /bin/bash ${quote(join(root, 'scripts/nightly-launch.sh'))} ${quote(root)} ${quote(database)} ${quote(process.execPath)}`,
   ''
 ].join('\n'), { mode: 0o755 });
 await chmod(`${launch}.tmp`, 0o755);

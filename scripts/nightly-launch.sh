@@ -3,6 +3,7 @@
 set -euo pipefail
 root=${1:?Informe a raiz do projeto}
 database=${2:?Informe o banco da Nightly}
+node_runtime=${3:-}
 state="${XDG_STATE_HOME:-$HOME/.local/state}/caixa-da-feira-nightly"
 mkdir -p "$state"
 exec 9>"$state/launch.lock"
@@ -19,6 +20,9 @@ fi
 exec >>"$state/nightly.log" 2>&1
 trap 'message error "Não foi possível abrir a Nightly. Diagnóstico: $state/nightly.log"' ERR
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+if [[ -n "$node_runtime" ]]; then
+  export PATH="$(dirname -- "$node_runtime"):$PATH"
+fi
 export CAIXA_DB="$database"
 export CAIXA_NIGHTLY=1
 export CAIXA_DESKTOP_RESOURCES="$root/apps/desktop/src-tauri/resources"

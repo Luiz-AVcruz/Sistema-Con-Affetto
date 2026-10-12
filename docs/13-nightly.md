@@ -32,6 +32,11 @@ O diagnóstico fica em `~/.local/state/caixa-da-feira-nightly/nightly.log`.
 Se mover o repositório, execute o instalador novamente. Para escolher outro
 banco já restaurado, use `CAIXA_DB=/caminho/absoluto/caixa.sqlite npm run nightly:install`.
 
+Instale o atalho com Node 24.15 ou posterior da série 24. Ele guarda o caminho
+desse runtime e o usa para recompilar os recursos em cada abertura, mesmo que
+o menu de aplicativos encontre outra versão do Node no sistema. Mantenha esse
+runtime instalado; se mudar seu caminho, recrie o atalho com a nova instalação.
+
 Faça backups pela aba Histórico. Ao passar para o Flatpak, feche o caixa,
 restaure esse backup em um arquivo novo usando o restaurador da versão de
 destino e confira os registros antes de selecioná-lo. O restaurador recusa
