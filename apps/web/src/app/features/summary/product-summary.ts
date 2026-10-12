@@ -4,7 +4,7 @@ export interface ProductAmounts {
   quantity: number; receivedCents: number; feeCents: number; netCents: number;
 }
 export interface ProductSummary extends ProductAmounts {
-  key: string; name: string; ownerName: string; byDate: Map<string, ProductAmounts>;
+  key: string; ownerId: number; name: string; ownerName: string; byDate: Map<string, ProductAmounts>;
 }
 
 // Usa o mesmo dia de recebimento e os mesmos valores históricos do fechamento.
@@ -20,7 +20,7 @@ export function summarizeProducts(sales: Sale[], dates: readonly string[]): Prod
       const key = `${item.productId}:${item.ownerId}`;
       let product = products.get(key);
       if (!product) {
-        product = { key, name: item.name, ownerName: item.ownerName, quantity: 0, receivedCents: 0, feeCents: 0, netCents: 0, byDate: new Map() };
+        product = { key, ownerId: item.ownerId, name: item.name, ownerName: item.ownerName, quantity: 0, receivedCents: 0, feeCents: 0, netCents: 0, byDate: new Map() };
         products.set(key, product);
       }
       const day = product.byDate.get(sale.paymentDate) ?? { quantity: 0, receivedCents: 0, feeCents: 0, netCents: 0 };

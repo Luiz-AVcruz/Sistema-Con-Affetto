@@ -84,7 +84,7 @@ test('consulta produtos, participantes e pedidos de dias fechados sem mudar o di
   await expect(sold.locator('tbody tr')).toHaveCount(2);
   await expect(sold.getByRole('row').filter({ hasText: products[0].name }).getByRole('cell')).toHaveText([products[0].name, owners[0].name, '1', money(2000), money(27), money(1973)]);
   await expect(sold.getByRole('row').filter({ hasText: products[1].name }).getByRole('cell')).toHaveText([products[1].name, owners[1].name, '1', money(5000), money(66), money(4934)]);
-  const comparison = page.getByRole('table', { name: 'Comparação de produtos por dia' });
+  const comparison = page.getByRole('table', { name: 'Comparação de produtos por período' });
   const productCells = comparison.getByRole('row').filter({ hasText: products[0].name }).getByRole('cell');
   await expect(productCells.nth(1)).toContainText('1 un.'); await expect(productCells.nth(1)).toContainText(money(1973));
   await expect(productCells.nth(2)).toContainText('2 un.'); await expect(productCells.nth(2)).toContainText(money(4000));
@@ -94,8 +94,12 @@ test('consulta produtos, participantes e pedidos de dias fechados sem mudar o di
   await expect(partnerCells.nth(1)).toContainText('1 un.'); await expect(partnerCells.nth(2)).toContainText('0 un.');
   await expect(partnerCells.nth(3)).toHaveText('1'); await expect(partnerCells.nth(6)).toHaveText(money(4934));
   await expect(comparison).not.toContainText('atualizado');
-  const peers = page.getByRole('table', { name: 'Comparação de participantes por dia' });
-  await expect(peers.getByRole('row').filter({ hasText: owners[0].name }).getByRole('cell')).toHaveText([owners[0].name, money(1973), money(4000), money(5973)]);
+  const peers = page.getByRole('table', { name: 'Comparação de participantes por período' });
+  const ownerCells = peers.getByRole('row').filter({ hasText: owners[0].name }).getByRole('cell');
+  await expect(ownerCells.nth(1)).toContainText('1 un.'); await expect(ownerCells.nth(1)).toContainText(money(1973));
+  await expect(ownerCells.nth(2)).toContainText('2 un.'); await expect(ownerCells.nth(2)).toContainText(money(4000));
+  await expect(ownerCells.nth(3)).toHaveText('3'); await expect(ownerCells.nth(4)).toHaveText(money(6000));
+  await expect(ownerCells.nth(5)).toHaveText(money(27)); await expect(ownerCells.nth(6)).toHaveText(money(5973));
   await page.screenshot({ path: testInfo.outputPath('sumario-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
@@ -145,7 +149,7 @@ test('consulta produtos, participantes e pedidos de dias fechados sem mudar o di
   await expect(page.getByRole('region', { name: /Resumo de/ })).toBeVisible();
   await page.getByRole('combobox', { name: 'Feira', exact: true }).selectOption({ label: next.name + ' · Ativa' });
   await expect(page.getByText(/Nenhum dia fechado nesta feira/)).toBeVisible();
-  await expect(page.getByRole('table', { name: 'Comparação de produtos por dia' })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: 'Comparação de produtos por período' })).toHaveCount(0);
 });
 
 test('sumário e comparação mostram taxas retificadas e preservam o fechamento original', async ({ page }) => {
@@ -185,9 +189,13 @@ test('sumário e comparação mostram taxas retificadas e preservam o fechamento
     const sold = summary.getByRole('table', { name: 'Produtos vendidos no dia' });
     await expect(sold.getByRole('row').filter({ hasText: products[0].name }).getByRole('cell')).toHaveText([products[0].name, 'Con Affetto retificação', '1', money(2000), money(62), money(1938)]);
     await expect(sold.getByRole('row').filter({ hasText: products[1].name }).getByRole('cell')).toHaveText([products[1].name, 'Participante retificação', '1', money(5000), money(154), money(4846)]);
-    const peers = page.getByRole('table', { name: 'Comparação de participantes por dia' });
-    await expect(peers.getByRole('row').filter({ hasText: 'Con Affetto retificação' }).getByRole('cell')).toHaveText(['Con Affetto retificação', money(1938), money(0), money(1938)]);
-    const comparison = page.getByRole('table', { name: 'Comparação de produtos por dia' });
+    const peers = page.getByRole('table', { name: 'Comparação de participantes por período' });
+    const ownerCells = peers.getByRole('row').filter({ hasText: 'Con Affetto retificação' }).getByRole('cell');
+    await expect(ownerCells.nth(1)).toContainText('1 un.'); await expect(ownerCells.nth(1)).toContainText(money(1938));
+    await expect(ownerCells.nth(2)).toContainText('0 un.'); await expect(ownerCells.nth(2)).toContainText(money(0));
+    await expect(ownerCells.nth(3)).toHaveText('1'); await expect(ownerCells.nth(4)).toHaveText(money(2000));
+    await expect(ownerCells.nth(5)).toHaveText(money(62)); await expect(ownerCells.nth(6)).toHaveText(money(1938));
+    const comparison = page.getByRole('table', { name: 'Comparação de produtos por período' });
     await expect(comparison.locator('tbody tr')).toHaveCount(3);
     await expect(comparison.getByRole('row').filter({ hasText: products[0].name })).toContainText('Con Affetto retificação');
     await expect(comparison.getByRole('row').filter({ hasText: updated.name })).toContainText('Participante retificação');
@@ -199,6 +207,159 @@ test('sumário e comparação mostram taxas retificadas e preservam o fechamento
     await expect(page.getByTestId('day-net')).toHaveText(money(6784));
     await expect(page.locator('.closing-list')).toContainText(money(6784));
     expect(db.prepare('SELECT snapshot FROM days WHERE date=?').get(date).snapshot).toBe(original);
+    await page.unroute('**/api/bootstrap?*');
+  } finally { db.close(); }
+});
+
+test('escolhe períodos, produtos, participantes e métricas, sem preencher dias vazios nem alterar fechamentos', async ({ page }, testInfo) => {
+  const db = openDatabase(':memory:');
+  try {
+    db.prepare('UPDATE fairs SET start_date=? WHERE id=1').run('2026-10-08');
+    db.prepare('INSERT INTO owners(id,name) VALUES(1,?),(2,?)').run('Con Affetto comparação', 'Parceiro comparação');
+    const register = new CashRegister(db);
+    const products = [2000, 5000].map((priceCents, index) => register.saveProduct({
+      name: index ? 'Caneca comparação' : 'Biscoito comparação', ownerId: index + 1, priceCents, stock: 100, active: true, description: ''
+    }));
+    const sale = (date: string, index: number, quantity = 1, options: object = {}) => register.createSale({
+      requestId: randomUUID(), date, paymentMethod: 'Pix', status: 'Pago', automaticFees: true, note: '',
+      items: [{ productId: products[index].id, quantity, expectedPriceCents: products[index].priceCents, discountCents: 0, feeCents: 0 }], ...options
+    });
+    sale('2026-10-09', 0, 1, { paymentMethod: 'Dinheiro',
+      payments: [{ paymentMethod: 'Dinheiro', amountCents: 4000 }, { paymentMethod: 'Cartão crédito', cardEntry: 'Aproximação', amountCents: 3000 }],
+      items: products.map(product => ({ productId: product.id, quantity: 1, expectedPriceCents: product.priceCents, discountCents: 0, feeCents: 0 }))
+    });
+    const pending = sale('2026-10-09', 0, 1, { status: 'Pendente' });
+    register.closeDay('2026-10-09', cash);
+    sale('2026-10-10', 0, 2);
+    const cancelled = sale('2026-10-10', 0);
+    register.cancelSale(cancelled.id);
+    register.receiveSale(pending.id, '2026-10-11', 'Pix', { automaticFees: true });
+    sale('2026-10-16', 0, 1, { paymentMethod: 'Cartão crédito', cardEntry: 'Aproximação' });
+    sale('2026-10-17', 1, 1, { paymentMethod: 'Dinheiro' });
+    sale('2026-10-18', 0, 1, { paymentMethod: 'Permuta' });
+    sale('2026-10-23', 0, 3);
+    sale('2026-10-25', 1, 2);
+    register.saveDay('2026-10-12', cash);
+    register.saveDay('2026-10-13', { ...cash, countedCents: 0 });
+    register.saveDay('2026-10-14', { ...cash, note: 'Observação sem vendas' });
+    register.saveDay('2026-10-24', cash);
+    // Apenas consultar uma data sem feira não cria um fechamento.
+    register.day('2026-10-15');
+    register.closeFair('2026-10-25');
+    const before = register.bootstrap('2026-10-25');
+    expect(before.closedDays).toHaveLength(13);
+    expect(before.closedDays.some(day => day.date === '2026-10-15')).toBe(false);
+    const originals = db.prepare('SELECT date,snapshot FROM days WHERE fair_id=1 ORDER BY date').all();
+    await page.route('**/api/bootstrap?*', async route => {
+      const params = new URL(route.request().url()).searchParams;
+      await route.fulfill({ json: new CashRegister(db, params.has('fairId') ? Number(params.get('fairId')) : undefined).bootstrap(params.get('date')!) });
+    });
+    const writes: string[] = [];
+    page.on('request', request => { if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes.push(request.url()); });
+    await page.goto('/');
+    await page.locator('.date-field input').fill('2026-10-25');
+    await page.getByRole('button', { name: 'Sumário', exact: true }).click();
+    const days = page.getByRole('table', { name: 'Dias fechados da feira' });
+    await expect(days.locator('tbody tr')).toHaveCount(10);
+    await expect(days).not.toContainText('08/10/2026'); await expect(days).not.toContainText('12/10/2026');
+    await expect(days).not.toContainText('24/10/2026'); await expect(days).not.toContainText('15/10/2026');
+    await expect(days).toContainText('13/10/2026'); await expect(days).toContainText('14/10/2026');
+    await expect(days).toContainText('18/10/2026');
+    await page.getByRole('checkbox', { name: 'Mostrar fechamentos vazios', exact: true }).check();
+    await expect(days.locator('tbody tr')).toHaveCount(13);
+    const totals = page.getByRole('table', { name: 'Resumo dos períodos comparados' });
+    await expect(totals.getByRole('row').filter({ hasText: '12/10/2026' }).getByRole('cell')).toHaveText([
+      '12/10/2026', '0', '0', money(0), money(0), money(0), 'Sem venda paga'
+    ]);
+    await page.getByRole('checkbox', { name: 'Mostrar fechamentos vazios', exact: true }).uncheck();
+    for (const date of ['13/10/2026', '14/10/2026']) await page.getByRole('checkbox', { name: 'Comparar ' + date, exact: true }).uncheck();
+    await page.getByRole('combobox', { name: 'Agrupar comparação', exact: true }).selectOption('week');
+    await expect(totals.locator('tbody tr')).toHaveCount(3);
+    for (const expected of [
+      ['09/10/2026 a 11/10/2026', '5', '3', money(13000), money(93), money(12907), money(4333)],
+      ['16/10/2026 a 18/10/2026', '2', '2', money(7000), money(62), money(6938), money(3500)],
+      ['23/10/2026 a 25/10/2026', '5', '2', money(16000), money(0), money(16000), money(8000)]
+    ]) await expect(totals.getByRole('row').filter({ hasText: expected[0] }).getByRole('cell')).toHaveText(expected);
+    const comparison = page.getByRole('table', { name: 'Comparação de produtos por período' });
+    const peers = page.getByRole('table', { name: 'Comparação de participantes por período' });
+    const cookie = comparison.getByRole('row').filter({ hasText: 'Biscoito comparação' }).getByRole('cell');
+    await expect(cookie.nth(1)).toContainText('4 un.'); await expect(cookie.nth(1)).toContainText(money(7973));
+    await expect(cookie.nth(2)).toContainText('1 un.'); await expect(cookie.nth(2)).toContainText(money(1938));
+    await expect(cookie.nth(3)).toContainText('3 un.'); await expect(cookie.nth(3)).toContainText(money(6000));
+    await expect(cookie.nth(4)).toHaveText('8'); await expect(cookie.nth(5)).toHaveText(money(16000));
+    await expect(cookie.nth(6)).toHaveText(money(89)); await expect(cookie.nth(7)).toHaveText(money(15911));
+    const mug = comparison.getByRole('row').filter({ hasText: 'Caneca comparação' }).getByRole('cell');
+    for (const [metric, value] of [['received', money(5000)], ['net', money(4934)], ['fees', money(66)], ['units', '1 un.']]) {
+      await page.getByRole('combobox', { name: 'Valores por período', exact: true }).selectOption(metric);
+      await expect(mug.nth(1)).toHaveText(value);
+    }
+    for (const [order, first] of [['units-asc', 'Caneca comparação'], ['net-desc', 'Caneca comparação'], ['net-asc', 'Biscoito comparação'], ['units-desc', 'Biscoito comparação']]) {
+      await page.getByRole('combobox', { name: 'Ordenar comparação', exact: true }).selectOption(order);
+      await expect(comparison.locator('tbody tr').first()).toContainText(first);
+    }
+    await page.getByRole('button', { name: 'Limpar dias da comparação', exact: true }).click();
+    await expect(totals).toHaveCount(0); await expect(comparison).toHaveCount(0);
+    await expect(page.getByText(/Nenhum dia escolhido para comparar/)).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Resumo de 25/10/2026', exact: true }).getByTestId('day-net')).toHaveText(money(10000));
+    for (const date of ['09/10/2026', '16/10/2026']) await page.getByRole('checkbox', { name: 'Comparar ' + date, exact: true }).check();
+    await expect(totals.locator('tbody tr')).toHaveCount(2);
+    await expect(cookie.nth(3)).toHaveText('2'); await expect(cookie.nth(4)).toHaveText(money(4000));
+    await expect(cookie.nth(5)).toHaveText(money(89)); await expect(cookie.nth(6)).toHaveText(money(3911));
+    await expect(mug.nth(2)).toHaveText('0 un.'); // Produto sem venda no período permanece comparável.
+    await page.getByText('Escolher produtos e participantes', { exact: true }).click();
+    await page.getByRole('checkbox', { name: 'Comparar participante Con Affetto comparação', exact: true }).uncheck();
+    await expect(comparison.locator('tbody tr')).toHaveCount(1); await expect(peers.locator('tbody tr')).toHaveCount(1);
+    await expect(totals.locator('tbody tr').first().getByRole('cell').nth(3)).toHaveText(money(7000));
+    await page.getByRole('button', { name: 'Limpar produtos', exact: true }).click();
+    await expect(comparison).toHaveCount(0); await expect(peers.locator('tbody tr')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Todos os produtos', exact: true }).click();
+    await page.getByRole('button', { name: 'Todos os participantes', exact: true }).click();
+    await expect(comparison.locator('tbody tr')).toHaveCount(2); await expect(peers.locator('tbody tr')).toHaveCount(2);
+    await page.getByRole('checkbox', { name: 'Comparar produto Biscoito comparação · Con Affetto comparação', exact: true }).uncheck();
+    await expect(comparison.locator('tbody tr')).toHaveCount(1); await expect(peers.locator('tbody tr')).toHaveCount(2);
+    await page.getByRole('combobox', { name: 'Comparar', exact: true }).selectOption('products');
+    await expect(comparison).toHaveCount(1); await expect(peers).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Comparar', exact: true }).selectOption('owners');
+    await expect(comparison).toHaveCount(0); await expect(peers).toHaveCount(1);
+    await page.getByRole('combobox', { name: 'Comparar', exact: true }).selectOption('both');
+    await page.getByRole('combobox', { name: 'Valores por período', exact: true }).selectOption('net');
+    await page.getByRole('combobox', { name: 'Ordenar comparação', exact: true }).selectOption('net-desc');
+    await expect(page.locator('.date-field input')).toHaveValue('2026-10-25');
+    await page.screenshot({ path: testInfo.outputPath('comparacoes-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+    await page.getByRole('button', { name: 'Sumário', exact: true }).click();
+    await expect(page.getByRole('combobox', { name: 'Agrupar comparação', exact: true })).toHaveValue('week');
+    await expect(comparison.locator('tbody tr')).toHaveCount(1);
+    await page.reload();
+    await page.getByRole('button', { name: 'Sumário', exact: true }).click();
+    await expect(page.getByRole('combobox', { name: 'Valores por período', exact: true })).toHaveValue('net');
+    await expect(page.getByRole('combobox', { name: 'Ordenar comparação', exact: true })).toHaveValue('net-desc');
+    await expect(totals.locator('tbody tr')).toHaveCount(2); await expect(comparison.locator('tbody tr')).toHaveCount(1);
+    expect(register.bootstrap('2026-10-25')).toEqual(before);
+    const next = register.createFair({ name: 'Próxima comparação', targetCents: null, startDate: '2026-10-26' });
+    const nextRegister = new CashRegister(db, next.id);
+    nextRegister.createSale({ requestId: randomUUID(), date: '2026-10-26', paymentMethod: 'Pix', status: 'Pago', automaticFees: true, note: '',
+      items: [{ productId: products[0].id, quantity: 1, expectedPriceCents: 2000, discountCents: 0, feeCents: 0 }] });
+    nextRegister.closeDay('2026-10-26', cash);
+    await page.evaluate(id => localStorage.setItem('caixa-feira-comparisons-v1-' + id, JSON.stringify({
+      dates: 'invalid', ownerIds: [null], productKeys: [4], grouping: 'invalid', metric: 'invalid', order: 'invalid', target: 'invalid', showEmpty: 'invalid'
+    })), next.id);
+    await page.reload();
+    await page.getByRole('button', { name: 'Sumário', exact: true }).click();
+    await expect(page.getByRole('combobox', { name: 'Valores por período', exact: true })).toHaveValue('units-net');
+    await expect(page.getByRole('combobox', { name: 'Agrupar comparação', exact: true })).toHaveValue('day');
+    await expect(page.getByRole('combobox', { name: 'Comparar', exact: true })).toHaveValue('both');
+    await expect(page.getByRole('checkbox', { name: 'Mostrar fechamentos vazios', exact: true })).not.toBeChecked();
+    await expect(totals.locator('tbody tr')).toHaveCount(1);
+    await page.getByRole('combobox', { name: 'Feira', exact: true }).selectOption({ label: before.fair.name + ' · Encerrada' });
+    await expect(page.getByRole('combobox', { name: 'Agrupar comparação', exact: true })).toHaveValue('week');
+    await expect(page.getByRole('combobox', { name: 'Valores por período', exact: true })).toHaveValue('net');
+    await expect(totals.locator('tbody tr')).toHaveCount(2); await expect(comparison.locator('tbody tr')).toHaveCount(1);
+    expect(db.prepare('SELECT date,snapshot FROM days WHERE fair_id=1 ORDER BY date').all()).toEqual(originals);
+    expect(writes).toEqual([]);
     await page.unroute('**/api/bootstrap?*');
   } finally { db.close(); }
 });

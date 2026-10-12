@@ -66,17 +66,49 @@ participante e forma de pagamento, descontos, pendências, permutas/brindes,
 conferência e observação guardadas. Para ver dias de uma feira anterior, selecione
 essa feira no topo do aplicativo.
 
+O aplicativo não completa os intervalos do calendário. Consultar uma data não
+cria registros, e encerrar a feira fecha apenas a data inicial e as datas que têm
+pedidos, recebimentos ou conferências salvas. Um fechamento inteiramente vazio
+fica oculto por padrão; **Mostrar fechamentos vazios** permite consultá-lo sem
+apagar o registro. Contagem explicitamente informada, inclusive zero, troco,
+entrada, retirada, observação, pendência, permuta, brinde ou pedido cancelado
+mantêm o dia visível. Não existe bloqueio de segunda a quinta: um registro real
+nesses dias continua disponível, inclusive em feiras futuras.
+
 **Produtos vendidos neste dia** mostra unidades, bruto recebido, taxas e líquido
 por produto e participante, da maior quantidade para a menor. **Comparação dos
-produtos entre dias** coloca unidades e líquido lado a lado para cada dia fechado,
-com totais por produto. **Comparação dos participantes entre dias** permite
-comparar o líquido de cada participante em todos esses dias.
+produtos** e **Comparação dos participantes** colocam os períodos escolhidos lado
+a lado. Em **Escolher comparações**, marque os dias na lista de fechamentos e
+escolha produtos, participantes ou ambos; unidades, bruto recebido, taxas,
+líquido ou unidades junto do líquido; maior/menor quantidade ou líquido primeiro.
+Os totais e a ordenação são recalculados somente com os dias marcados.
+
+O agrupamento **Por semana** reúne as datas escolhidas de segunda a domingo,
+sem criar dias intermediários. Para os fins de semana de outubro de 2026, permite
+comparar 09–11, 16–18 e 23–25/10 conforme cada dia for fechado e selecionado.
+O intervalo no cabeçalho vai do primeiro ao último dia escolhido do grupo; um dia
+desmarcado dentro desse intervalo não entra na soma. As escolhas ficam no perfil
+local, separadas por feira, inclusive ao trocar de seção ou reabrir. Não integram
+o backup do banco. Selecionar todos mantém novos fechamentos incluídos; selecionar
+datas específicas mantém esse conjunto até escolher outras datas.
+
+**Escolher produtos e participantes** contém os filtros de linhas. Participantes
+filtram as duas tabelas; produtos filtram somente a tabela de produtos. Esses
+filtros não mudam o resumo individual do dia nem o **Resumo geral dos períodos
+escolhidos**, que mostra unidades vendidas, pedidos pagos, bruto, taxas, líquido
+e ticket médio de toda a feira nas datas escolhidas. Ticket médio é o bruto
+recebido dividido pelos pedidos pagos, arredondado apenas para exibição. Sem
+pedido pago, aparece **Sem venda paga**. Limpar todos os dias não recupera todos
+implicitamente: a página informa que não há comparação selecionada.
 
 As vendas pagas entram no dia do recebimento, como no fechamento. Pagamentos
 divididos contam os itens uma única vez. Pedidos cancelados ou ainda pendentes,
 permutas e brindes não contam como produtos vendidos; as duas últimas categorias
 continuam separadas no resumo do dia. Produtos sem vendas pagas nos dias fechados
-não aparecem nas tabelas. São usados nome, participante e valores históricos
+não aparecem nas tabelas. Um produto vendido em outros dias fechados permanece
+comparável com zero quando não vendeu nas datas escolhidas. Zero não comprova
+baixa procura: a página não informa disponibilidade ou falta de estoque no período.
+São usados nome, participante e valores históricos
 dos itens; mudar preço ou participante no cadastro não reatribui vendas antigas.
 O bruto recebido já considera descontos; o líquido desconta taxas de pagamento.
 Custos de produção não são registrados, portanto líquido não é lucro.
@@ -94,7 +126,8 @@ essa opção recupera seu filtro habitual e suas preferências salvas.
 
 **Exportar dias desta feira** usa o CSV de fechamentos existente, limitado à feira
 consultada. O arquivo inclui todos os dias registrados, inclusive dias ainda
-abertos. A página Sumário mostra somente fechamentos guardados. A conferência
+abertos e fechamentos vazios; escolhas e filtros da comparação não limitam esse
+CSV. A página Sumário mostra somente fechamentos guardados. A conferência
 e as vendas continuam sendo feitas nas seções Fechamento e Vender.
 
 ## Meta e pagamentos desta feira

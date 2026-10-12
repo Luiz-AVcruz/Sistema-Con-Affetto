@@ -1,16 +1,68 @@
 @if (store.data(); as data) {
   <section class="panel">
     <div class="section-heading"><h2>Sumário dos dias fechados</h2><a class="secondary" [href]="'/api/export/days.csv?fairId=' + data.fair.id" download>Exportar dias desta feira</a></div>
-    <p class="muted">{{ data.fair.name }} · {{ closedDays().length }} dia(s) fechado(s). Selecione um dia para consultar seu resumo e seus pedidos. Para consultar outra feira, use o seletor no topo.</p>
+    <p class="muted">{{ data.fair.name }} · {{ closedDays().length }} dia(s) fechado(s) visível(is). Consulte um resumo ou marque os dias que deseja comparar. Para consultar outra feira, use o seletor no topo.</p>
+    <label class="checkbox-label"><input type="checkbox" [ngModel]="preferences().showEmpty" (ngModelChange)="updatePreferences({ showEmpty: $event })">Mostrar fechamentos vazios</label>
+    @if (hiddenEmptyDays()) { <p class="muted">{{ hiddenEmptyDays() }} fechamento(s) sem movimento oculto(s). Os registros continuam guardados. Datas sem fechamento não são acrescentadas ao calendário.</p> }
     @if (closedDays().length) {
-      <div class="table-wrap"><table aria-label="Dias fechados da feira"><thead><tr><th>Dia</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th><th>Conferência</th><th>Consulta</th></tr></thead><tbody>
+      <div class="table-wrap"><table aria-label="Dias fechados da feira"><thead><tr><th>Comparar</th><th>Dia</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th><th>Conferência</th><th>Consulta</th></tr></thead><tbody>
         @for (day of closedDays(); track day.date) {
           @let values = day.adjustedSummary ?? day.summary;
-          <tr [class.closed-day-selected]="selectedDay()?.date === day.date"><td>{{ dayLabel(day.date) }}@if (day.adjustedSummary) { <small>Retificado</small> }</td><td class="number">{{ money(values.receivedCents) }}</td><td class="number">{{ money(values.feeCents) }}</td><td class="number">{{ money(values.netCents) }}</td><td>{{ day.countedCents === null ? 'Sem contagem' : day.differenceCents === 0 ? 'Conferido' : 'Com diferença' }}</td><td><button type="button" class="secondary" (click)="selectDay(day.date)" [attr.aria-label]="'Ver resumo de ' + dayLabel(day.date)" [attr.aria-pressed]="selectedDay()?.date === day.date" aria-controls="closed-day-summary" [disabled]="store.busy()">Ver resumo</button></td></tr>
+          <tr [class.closed-day-selected]="selectedDay()?.date === day.date"><td><label class="checkbox-label comparison-day"><input type="checkbox" [attr.aria-label]="'Comparar ' + dayLabel(day.date)" [ngModel]="comparisonDates().has(day.date)" (ngModelChange)="toggleDay(day.date, $event)"></label></td><td>{{ dayLabel(day.date) }}@if (day.adjustedSummary) { <small>Retificado</small> }</td><td class="number">{{ money(values.receivedCents) }}</td><td class="number">{{ money(values.feeCents) }}</td><td class="number">{{ money(values.netCents) }}</td><td>{{ day.countedCents === null ? 'Sem contagem' : day.differenceCents === 0 ? 'Conferido' : 'Com diferença' }}</td><td><button type="button" class="secondary" (click)="selectDay(day.date)" [attr.aria-label]="'Ver resumo de ' + dayLabel(day.date)" [attr.aria-pressed]="selectedDay()?.date === day.date" aria-controls="closed-day-summary" [disabled]="store.busy()">Ver resumo</button></td></tr>
         }
       </tbody></table></div>
-    } @else { <p class="empty">Nenhum dia fechado nesta feira. Os resumos ficam disponíveis depois de usar Fechar dia na seção Fechamento.</p> }
+    } @else if (hiddenEmptyDays()) { <p class="empty">Nenhum fechamento com movimento nesta feira. Marque Mostrar fechamentos vazios para consultar os registros guardados.</p> }
+    @else { <p class="empty">Nenhum dia fechado nesta feira. Os resumos ficam disponíveis depois de usar Fechar dia na seção Fechamento.</p> }
   </section>
+  @if (closedDays().length) {
+    <section class="panel spaced">
+      <div class="section-heading"><h2>Escolher comparações</h2><span>{{ comparisonDays().length }} dia(s) em {{ periods().length }} período(s)</span></div>
+      <div class="button-row"><button type="button" class="secondary" (click)="updatePreferences({ dates: null })">Comparar todos os dias</button><button type="button" class="secondary" (click)="updatePreferences({ dates: [] })">Limpar dias da comparação</button></div>
+      <div class="comparison-filters">
+        <label>Comparar<select [ngModel]="preferences().target" (ngModelChange)="updatePreferences({ target: $event })">@for (option of comparisonTargets; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+        <label>Agrupar comparação<select [ngModel]="preferences().grouping" (ngModelChange)="updatePreferences({ grouping: $event })">@for (option of comparisonGroupings; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+        <label>Valores por período<select [ngModel]="preferences().metric" (ngModelChange)="updatePreferences({ metric: $event })">@for (option of comparisonMetrics; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+        <label>Ordenar comparação<select [ngModel]="preferences().order" (ngModelChange)="updatePreferences({ order: $event })">@for (option of comparisonOrders; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+      </div>
+      <p class="muted">As semanas vão de segunda a domingo e agrupam somente os dias marcados. Se a feira ocorre sexta, sábado e domingo, cada grupo reúne seu fim de semana. As escolhas ficam salvas para esta feira.</p>
+      <details class="comparison-choices"><summary>Escolher produtos e participantes</summary>
+        <p class="muted">Participantes filtram as duas tabelas. Produtos filtram somente a tabela de produtos. O resumo geral dos períodos e o resumo individual de cada dia continuam completos.</p>
+        <div class="two-columns">
+          <div><h3>Participantes</h3><div class="button-row"><button type="button" class="secondary" (click)="updatePreferences({ ownerIds: null })">Todos os participantes</button><button type="button" class="secondary" (click)="updatePreferences({ ownerIds: [] })">Limpar participantes</button></div>
+            <div class="comparison-filter-options">@for (owner of ownerChoices(); track owner.id) { <label class="checkbox-label"><input type="checkbox" [attr.aria-label]="'Comparar participante ' + owner.name" [ngModel]="selectedOwnerIds().has(owner.id)" (ngModelChange)="toggleOwner(owner.id, $event)">{{ owner.name }}</label> }</div>
+          </div>
+          <div><h3>Produtos</h3><div class="button-row"><button type="button" class="secondary" (click)="updatePreferences({ productKeys: null })">Todos os produtos</button><button type="button" class="secondary" (click)="updatePreferences({ productKeys: [] })">Limpar produtos</button></div>
+            <div class="comparison-filter-options">@for (product of productChoices(); track product.key) { <label class="checkbox-label"><input type="checkbox" [attr.aria-label]="'Comparar produto ' + product.name + ' · ' + product.ownerName" [ngModel]="selectedProductKeys().has(product.key)" (ngModelChange)="toggleProduct(product.key, $event)"><span>{{ product.name }}<small>{{ product.ownerName }}</small></span></label> } @empty { <p class="empty">Nenhum produto com venda paga para os participantes escolhidos.</p> }</div>
+          </div>
+        </div>
+      </details>
+      @if (periods().length) {
+        <h3>Resumo geral dos períodos escolhidos</h3>
+        <p class="muted">Todos os participantes e produtos nos dias marcados. Ticket médio é o bruto recebido dividido pelo número de pedidos pagos; um pedido dividido em dois pagamentos conta uma vez.</p>
+        <div class="table-wrap"><table aria-label="Resumo dos períodos comparados"><thead><tr><th>Período</th><th class="number">Unidades vendidas</th><th class="number">Pedidos pagos</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th><th class="number">Ticket médio</th></tr></thead><tbody>@for (period of periodSummaries(); track period.key) { <tr><td>{{ period.label }}</td><td class="number">{{ period.quantity }}</td><td class="number">{{ period.paidCount }}</td><td class="number">{{ money(period.receivedCents) }}</td><td class="number">{{ money(period.feeCents) }}</td><td class="number">{{ money(period.netCents) }}</td><td class="number">{{ period.averageCents === null ? 'Sem venda paga' : money(period.averageCents) }}</td></tr> }</tbody></table></div>
+      } @else { <p class="empty">Nenhum dia escolhido para comparar. Marque os dias na lista ou use Comparar todos os dias.</p> }
+    </section>
+    @if (periods().length && preferences().target !== 'owners') {
+      <section class="panel spaced">
+        <h2>Comparação dos produtos</h2>
+        <p class="muted">{{ comparisonMetricsLabel() }} em cada período. Os totais e a ordenação consideram somente os dias escolhidos. Zero indica ausência de venda paga nesse período; não informa se o produto estava disponível. Líquido desconta taxas de pagamento; custos de produção não estão cadastrados.</p>
+        @if (comparisonProducts().length) {
+          <div class="table-wrap"><table aria-label="Comparação de produtos por período"><thead><tr><th>Produto / participante</th>@for (period of periods(); track period.key) { <th class="number">{{ period.label }}</th> }<th class="number">Total de unidades</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th></tr></thead><tbody>
+            @for (product of comparisonProducts(); track product.key) { <tr><td>{{ product.name }}<small>{{ product.ownerName }}</small></td>@for (period of periods(); track period.key) { @let display = comparisonDisplay(periodAmounts(product.byDate, period.dates)); <td class="number">{{ display.value }}@if (display.secondary) { <small>{{ display.secondary }}</small> }</td> }<td class="number">{{ product.quantity }}</td><td class="number">{{ money(product.receivedCents) }}</td><td class="number">{{ money(product.feeCents) }}</td><td class="number">{{ money(product.netCents) }}</td></tr> }
+          </tbody></table></div>
+        } @else { <p class="empty">Nenhum produto escolhido com venda paga nos dias fechados desta feira.</p> }
+      </section>
+    }
+    @if (periods().length && preferences().target !== 'products') {
+      <section class="panel spaced">
+        <h2>Comparação dos participantes</h2>
+        <p class="muted">{{ comparisonMetricsLabel() }} em cada período, incluindo todos os produtos de cada participante nos dias escolhidos.</p>
+        @if (owners().length) {
+          <div class="table-wrap"><table aria-label="Comparação de participantes por período"><thead><tr><th>Participante</th>@for (period of periods(); track period.key) { <th class="number">{{ period.label }}</th> }<th class="number">Total de unidades</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th></tr></thead><tbody>@for (owner of owners(); track owner.ownerId) { <tr><td>{{ owner.name }}</td>@for (period of periods(); track period.key) { @let display = comparisonDisplay(periodAmounts(owner.byDate, period.dates)); <td class="number">{{ display.value }}@if (display.secondary) { <small>{{ display.secondary }}</small> }</td> }<td class="number">{{ owner.quantity }}</td><td class="number">{{ money(owner.receivedCents) }}</td><td class="number">{{ money(owner.feeCents) }}</td><td class="number">{{ money(owner.netCents) }}</td></tr> }</tbody></table></div>
+        } @else { <p class="empty">Nenhum participante escolhido.</p> }
+      </section>
+    }
+  }
   @if (selectedDay(); as day) {
     <section class="panel spaced" id="closed-day-summary" role="region" aria-labelledby="closed-day-heading">
       <div class="section-heading"><h2 id="closed-day-heading">Resumo de {{ dayLabel(day.date) }}</h2><button type="button" class="secondary" (click)="showHistory.emit(day.date)" [disabled]="store.busy()">Ver pedidos deste dia</button></div>
@@ -25,22 +77,6 @@
         <dl class="totals"><div><dt>Troco inicial</dt><dd>{{ money(day.openingCents) }}</dd></div><div><dt>Entradas extras</dt><dd>{{ money(day.extraCents) }}</dd></div><div><dt>Retiradas</dt><dd>{{ money(day.withdrawalCents) }}</dd></div><div><dt>Dinheiro esperado</dt><dd>{{ money(day.expectedCents) }}</dd></div><div><dt>Dinheiro contado</dt><dd>{{ day.countedCents === null ? 'Sem contagem' : money(day.countedCents) }}</dd></div><div><dt>Diferença</dt><dd [class.danger-text]="day.differenceCents !== null && day.differenceCents !== 0">{{ day.differenceCents === null ? 'Sem contagem' : money(day.differenceCents) }}</dd></div></dl>
       </details>
       @if (day.note) { <h3>Observação do fechamento</h3><p class="closing-note">{{ day.note }}</p> }
-    </section>
-  }
-  @if (closedDays().length) {
-    <section class="panel spaced">
-      <h2>Comparação dos produtos entre dias</h2>
-      <p class="muted">Cada dia mostra unidades vendidas e líquido recebido. Os totais consideram somente os dias fechados desta feira. Cancelamentos, pendências, permutas e brindes não entram nesta tabela.</p>
-      @if (products().length) {
-        <div class="table-wrap"><table aria-label="Comparação de produtos por dia"><thead><tr><th>Produto / participante</th>@for (day of comparisonDays(); track day.date) { <th class="number">{{ dayLabel(day.date) }}</th> }<th class="number">Total de unidades</th><th class="number">Bruto recebido</th><th class="number">Taxas</th><th class="number">Líquido</th></tr></thead><tbody>
-          @for (product of products(); track product.key) { <tr><td>{{ product.name }}<small>{{ product.ownerName }}</small></td>@for (day of comparisonDays(); track day.date) { @let amounts = product.byDate.get(day.date); <td class="number">{{ amounts?.quantity ?? 0 }} un.<small>{{ money(amounts?.netCents ?? 0) }}</small></td> }<td class="number">{{ product.quantity }}</td><td class="number">{{ money(product.receivedCents) }}</td><td class="number">{{ money(product.feeCents) }}</td><td class="number">{{ money(product.netCents) }}</td></tr> }
-        </tbody></table></div>
-      } @else { <p class="empty">Nenhuma venda paga de produtos nos dias fechados.</p> }
-    </section>
-    <section class="panel spaced">
-      <h2>Comparação dos participantes entre dias</h2>
-      <p class="muted">Líquido de cada participante depois das taxas de pagamento, somente nos dias fechados desta feira.</p>
-      <div class="table-wrap"><table aria-label="Comparação de participantes por dia"><thead><tr><th>Participante</th>@for (day of comparisonDays(); track day.date) { <th class="number">{{ dayLabel(day.date) }}</th> }<th class="number">Líquido dos dias fechados</th></tr></thead><tbody>@for (owner of owners(); track owner.ownerId) { <tr><td>{{ owner.name }}</td>@for (day of comparisonDays(); track day.date) { <td class="number">{{ money(owner.byDate.get(day.date)?.netCents ?? 0) }}</td> }<td class="number">{{ money(owner.netCents) }}</td></tr> }</tbody></table></div>
     </section>
   }
 }
