@@ -1,13 +1,23 @@
 # Nightly local
 
 O atalho **Caixa da Feira — Nightly** abre uma janela Tauri a partir dos fontes
-locais. Ao iniciar, recompila Angular/Node e atualiza o executável Rust quando
-seus fontes ou o compilador mudam. Guarda a identificação desses arquivos para
-reutilizar a janela já compilada nas outras aberturas. Não cria nem instala um
-Flatpak. Feche e reabra para aplicar edições; a janela aberta não recarrega
-automaticamente. A preparação pode levar alguns
-segundos. Mudanças nas dependências exigem instalá-las antes; o Cargo do atalho
+locais. Ao iniciar, reutiliza Angular/Node já compilados quando os fontes,
+configurações, instalação de dependências e runtime continuam iguais. Confere
+também o conteúdo dos recursos; um arquivo ausente ou alterado exige nova
+preparação. Atualiza o executável Rust quando seus fontes ou o compilador mudam.
+Não cria nem instala um Flatpak. Feche e reabra para aplicar edições; a janela
+aberta não recarrega automaticamente. A preparação pode levar alguns segundos
+quando precisa recompilar. A primeira abertura após esta atualização
+prepara e registra o cache; as seguintes o reutilizam. Uma preparação com falha
+ou com fontes alterados durante a compilação não ganha um cache válido. Mudanças
+nas dependências exigem instalá-las antes; o Cargo do atalho
 usa o modo offline.
+
+O cache fica em `apps/desktop/src-tauri/resources/.nightly-cache.json`, junto aos
+artefatos ignorados pelo Git. Dados do comércio, rascunhos e preferências não
+fazem parte da chave e não provocam recompilação. `npm run prepare:resources
+-w @caixa/desktop` continua fazendo uma preparação completa quando executado
+explicitamente, incluindo durante o empacotamento normal.
 
 Neste notebook, os fontes estão em `~/Projetos/Sistema-Con-Affetto` e o banco
 principal durante o desenvolvimento é `data/nightly/caixa.sqlite`. Ele foi
@@ -33,8 +43,8 @@ Se mover o repositório, execute o instalador novamente. Para escolher outro
 banco já restaurado, use `CAIXA_DB=/caminho/absoluto/caixa.sqlite npm run nightly:install`.
 
 Instale o atalho com Node 24.15 ou posterior da série 24. Ele guarda o caminho
-desse runtime e o usa para recompilar os recursos em cada abertura, mesmo que
-o menu de aplicativos encontre outra versão do Node no sistema. Mantenha esse
+desse runtime e o usa para preparar ou validar os recursos em cada abertura,
+mesmo que o menu encontre outra versão do Node no sistema. Mantenha esse
 runtime instalado; se mudar seu caminho, recrie o atalho com a nova instalação.
 
 Faça backups pela aba Histórico. Ao passar para o Flatpak, feche o caixa,

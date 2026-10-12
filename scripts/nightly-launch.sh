@@ -58,7 +58,7 @@ native_fingerprint() {
   } | sha256sum | cut -d ' ' -f 1
 }
 native_key=$(native_fingerprint)
-npm run prepare:resources -w @caixa/desktop
+node scripts/nightly-prepare.mjs
 executable="$root/apps/desktop/src-tauri/target/release/caixa-da-feira-desktop"
 stamp="$state/native-sources.sha256"
 if [[ ! -x "$executable" || ! -f "$stamp" || "$(cat "$stamp")" != "$native_key" ]]; then
